@@ -175,8 +175,8 @@ class ScoutClient:
         self._audio_tcpros_port: int = 0
         self._audio_seq: int = 0
         self._speaking_lock = asyncio.Lock()
-        self.active_voice: str = "pt-PT-RaquelNeural"  # Voz neural humana natural por padrão (Raquel - Portugal)
-        self.active_voice_rate: str = "+2%"
+        self.active_voice: str = "pt-PT-DuarteNeural"  # Voz neural europeia natural e fiável (Duarte - Portugal)
+        self.active_voice_rate: str = "+3%"
         self.active_voice_pitch: str = "+0Hz"
         self._on_speech_callback: Optional[Any] = None
         self._on_log_callback: Optional[Any] = None
@@ -1004,17 +1004,40 @@ class ScoutClient:
                 vol_diff = vol_pct - 100
                 vol_str = f"+{vol_diff}%" if vol_diff >= 0 else f"{vol_diff}%"
 
-                comm = edge_tts.Communicate(
-                    clean_text,
-                    voice=target_voice,
-                    rate=target_rate,
-                    pitch=target_pitch,
-                    volume=vol_str,
-                )
+                async def _synthesize(v: str) -> bytearray:
+                    buf = bytearray()
+                    comm = edge_tts.Communicate(
+                        clean_text,
+                        voice=v,
+                        rate=target_rate,
+                        pitch=target_pitch,
+                        volume=vol_str,
+                    )
+                    async for chunk in comm.stream():
+                        if chunk["type"] == "audio":
+                            buf.extend(chunk["data"])
+                    return buf
+
                 mp3_buf = bytearray()
-                async for chunk in comm.stream():
-                    if chunk["type"] == "audio":
-                        mp3_buf.extend(chunk["data"])
+                try:
+                    mp3_buf = await _synthesize(target_voice)
+                except Exception as ex:
+                    print(f"[TTS] Erro ao sintetizar com {target_voice}: {ex}")
+
+                # Se a voz falhar ou não devolver dados (ex: Raquel indisponível no endpoint público da MS),
+                # fazemos fallback automático para pt-PT-DuarteNeural para o Scout nunca ficar mudo!
+                if (not mp3_buf or len(mp3_buf) == 0) and target_voice != "pt-PT-DuarteNeural":
+                    print(f"[TTS] Fallback automático para voz fiável 'pt-PT-DuarteNeural'")
+                    try:
+                        mp3_buf = await _synthesize("pt-PT-DuarteNeural")
+                    except Exception as ex_fb:
+                        print(f"[TTS] Erro no fallback: {ex_fb}")
+
+                if not mp3_buf or len(mp3_buf) == 0:
+                    print("[TTS] Nenhum áudio gerado após tentativas.")
+                    self.telemetry.speaker_playing = False
+                    self.telemetry.last_action = "Aviso: Sem áudio TTS gerado"
+                    return False
 
                 def _encode_adts_sync(mp3_bytes: bytes) -> List[bytes]:
                     in_container = av.open(io.BytesIO(mp3_bytes), format="mp3")
@@ -1099,7 +1122,8 @@ class ScoutClient:
                     self._awake_until = time.time() + 30.0
                 self.telemetry.last_action = "Pronto (Voz reproduzida)"
                 return True
-            except Exception:
+            except Exception as e:
+                print(f"[TTS] Exceção geral em speak_on_robot: {e}")
                 self.telemetry.speaker_playing = False
                 return False
 
