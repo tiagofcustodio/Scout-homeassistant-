@@ -1,5 +1,4 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
-FROM ${BUILD_FROM}
+FROM alpine:3.19
 
 RUN apk add --no-cache nginx jq bash
 

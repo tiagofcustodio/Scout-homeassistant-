@@ -1,12 +1,16 @@
 name: "Moorebot Scout AI & Smart Home"
-version: "1.2.1"
+version: "1.2.2"
 slug: "moorebot_scout_ai"
 description: "Painel e Ponte Home Assistant para o robô Moorebot Scout (Câmara, Navegação Mecanum, Mapa 2D, Voz e IA no Mini PC)."
 url: "https://github.com/Tiagofcustodio/Scout-homeassistant-"
 arch:
   - aarch64
   - amd64
+  - armhf
   - armv7
+  - i386
+startup: application
+boot: auto
 init: false
 ingress: true
 ingress_port: 8099
