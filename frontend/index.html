@@ -743,6 +743,18 @@
   <!-- SCRIPTS DE CONTROLO, TELEMETRIA, JOYSTICK E FUNCIONALIDADES DOMÉSTICAS -->
   <!-- ===================================================================== -->
   <script>
+    // Suporte transparente para Home Assistant Ingress (/api/hassio_ingress/<token>/)
+    const INGRESS_PREFIX = (location.pathname.match(/^(\/api\/hassio_ingress\/[^\/]+)/) || ['', ''])[1];
+    if (INGRESS_PREFIX) {
+      const _origFetch = window.fetch.bind(window);
+      window.fetch = (url, opts) => {
+        if (typeof url === 'string' && url.startsWith('/')) url = INGRESS_PREFIX + url;
+        return _origFetch(url, opts);
+      };
+      const vEl = document.getElementById('videoStream');
+      if (vEl) vEl.src = INGRESS_PREFIX + '/api/video.mjpeg';
+    }
+
     let ws = null;
     let driveGear = 0.75;
     let mapZoomScale = 52.0;
@@ -750,7 +762,7 @@
 
     function connectWS() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}/ws/control`);
+      ws = new WebSocket(`${proto}//${location.host}${INGRESS_PREFIX}/ws/control`);
       ws.onmessage = (ev) => {
         const data = JSON.parse(ev.data);
         if (data.robot) updateHUD(data.robot);

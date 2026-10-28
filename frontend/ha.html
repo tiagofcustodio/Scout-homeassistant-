@@ -137,12 +137,23 @@
   </div>
 
   <script>
+    const INGRESS_PREFIX = (location.pathname.match(/^(\/api\/hassio_ingress\/[^\/]+)/) || ['', ''])[1];
+    if (INGRESS_PREFIX) {
+      const _origFetch = window.fetch.bind(window);
+      window.fetch = (url, opts) => {
+        if (typeof url === 'string' && url.startsWith('/')) url = INGRESS_PREFIX + url;
+        return _origFetch(url, opts);
+      };
+      const v = document.getElementById('videoStream');
+      if (v) v.src = INGRESS_PREFIX + '/api/video.mjpeg';
+    }
+
     let voiceMode = 'speak'; // 'speak' = reproduz diretamente na coluna do Scout | 'ai' = conversa + controla Home Assistant
     let ws = null;
 
     function connectWS() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}/ws/control`);
+      ws = new WebSocket(`${proto}//${location.host}${INGRESS_PREFIX}/ws/control`);
       ws.onclose = () => setTimeout(connectWS, 2000);
     }
     connectWS();
