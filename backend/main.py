@@ -84,6 +84,9 @@ class AudioSettingsUpdate(BaseModel):
     mic_sensitivity_pct: Optional[int] = None
     mic_require_wake_word: Optional[bool] = None
     wake_now: Optional[bool] = None
+    voice: Optional[str] = None
+    voice_rate: Optional[str] = None
+    voice_pitch: Optional[str] = None
 
 
 class EnrollPersonRequest(BaseModel):
@@ -403,6 +406,11 @@ async def get_status():
         "map": patrol_mapper.get_map_state(),
         "xbox": xbox_controller.get_status(),
         "domestic": domestic.get_status(),
+        "voice": {
+            "active": scout.active_voice,
+            "rate": scout.active_voice_rate,
+            "pitch": scout.active_voice_pitch,
+        },
         "logs": message_logs[-40:],
     }
 
@@ -517,6 +525,12 @@ async def get_all_logs():
 async def update_audio_settings(req: AudioSettingsUpdate):
     if req.speaker_volume_pct is not None:
         scout.set_speaker_volume(req.speaker_volume_pct)
+    if req.voice:
+        scout.active_voice = req.voice
+    if req.voice_rate:
+        scout.active_voice_rate = req.voice_rate
+    if req.voice_pitch:
+        scout.active_voice_pitch = req.voice_pitch
     scout.set_mic_vad(
         req.mic_vad_listening if req.mic_vad_listening is not None else scout.telemetry.mic_vad_listening,
         threshold_rms=req.mic_vad_threshold_rms,

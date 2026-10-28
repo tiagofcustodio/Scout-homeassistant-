@@ -175,6 +175,9 @@ class ScoutClient:
         self._audio_tcpros_port: int = 0
         self._audio_seq: int = 0
         self._speaking_lock = asyncio.Lock()
+        self.active_voice: str = "pt-PT-RaquelNeural"  # Voz neural humana natural por padrão (Raquel - Portugal)
+        self.active_voice_rate: str = "+2%"
+        self.active_voice_pitch: str = "+0Hz"
         self._on_speech_callback: Optional[Any] = None
         self._on_log_callback: Optional[Any] = None
         self._main_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -955,10 +958,17 @@ class ScoutClient:
         self.telemetry.last_action = f"Luz/Visao Noturna: {'ON' if self.telemetry.ir_led_on else 'OFF'}"
         return self.get_status()
 
-    async def speak_on_robot(self, text: str, voice: str = "pt-PT-DuarteNeural") -> bool:
+    async def speak_on_robot(
+        self,
+        text: str,
+        voice: Optional[str] = None,
+        rate: Optional[str] = None,
+        pitch: Optional[str] = None,
+    ) -> bool:
         """
-        Sintetiza voz em Portugues e transmite via TCPROS (/net_audio_frame -> ADTS AAC 16kHz Mono)
-        para tocar diretamente na coluna de som fisica do Moorebot Scout!
+        Sintetiza voz neural humana em Português e transmite via TCPROS (/net_audio_frame -> ADTS AAC 16kHz Mono)
+        para tocar diretamente na coluna de som física do Moorebot Scout!
+        Por padrão utiliza pt-PT-RaquelNeural (a voz mais suave, expressiva e natural de Portugal).
         """
         if not text or self.telemetry.mock_mode:
             return False
@@ -968,10 +978,24 @@ class ScoutClient:
                 import av
                 import edge_tts
 
-                # Limpar texto muito longo ou formatacao tecnica para soar natural
-                clean_text = text.replace("*", "").replace("#", "").strip()
-                if len(clean_text) > 260:
-                    clean_text = clean_text[:260]
+                # Pré-processamento avançado do texto para prosódia e entoação humana natural
+                clean_text = re.sub(r"\[.*?\]", "", text)
+                clean_text = re.sub(r"[\*#_~`]", "", clean_text)
+                clean_text = re.sub(r"\bm²\b", " metros quadrados", clean_text)
+                clean_text = re.sub(r"\bm\b", " metros", clean_text)
+                clean_text = re.sub(r"%", " por cento", clean_text)
+                clean_text = re.sub(r"\blx\b", " lux", clean_text)
+                clean_text = re.sub(r"\bswitch\.\b", "", clean_text)
+                clean_text = re.sub(r"\blight\.\b", "", clean_text)
+                clean_text = re.sub(r"\bcover\.\b", "", clean_text)
+                clean_text = re.sub(r"\s+", " ", clean_text).strip()
+
+                if len(clean_text) > 280:
+                    clean_text = clean_text[:280]
+
+                target_voice = voice or self.active_voice
+                target_rate = rate or self.active_voice_rate
+                target_pitch = pitch or self.active_voice_pitch
 
                 self.telemetry.speaker_playing = True
                 self.telemetry.speaker_last_text = clean_text
@@ -980,7 +1004,13 @@ class ScoutClient:
                 vol_diff = vol_pct - 100
                 vol_str = f"+{vol_diff}%" if vol_diff >= 0 else f"{vol_diff}%"
 
-                comm = edge_tts.Communicate(clean_text, voice=voice, volume=vol_str)
+                comm = edge_tts.Communicate(
+                    clean_text,
+                    voice=target_voice,
+                    rate=target_rate,
+                    pitch=target_pitch,
+                    volume=vol_str,
+                )
                 mp3_buf = bytearray()
                 async for chunk in comm.stream():
                     if chunk["type"] == "audio":

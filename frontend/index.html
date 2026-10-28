@@ -107,6 +107,16 @@
           </select>
         </div>
 
+        <!-- Seletor de Voz Neural -->
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-1 gap-1.5">
+          <span class="text-slate-400 text-[11px]">🗣️ Voz:</span>
+          <select id="voiceSelect" onchange="changeVoice(this.value)" class="bg-transparent text-emerald-300 font-semibold focus:outline-none cursor-pointer">
+            <option value="pt-PT-RaquelNeural" class="bg-slate-900" selected>👩 Raquel (PT · Natural)</option>
+            <option value="pt-PT-DuarteNeural" class="bg-slate-900">👨 Duarte (PT · Masculino)</option>
+            <option value="pt-BR-ThalitaMultilingualNeural" class="bg-slate-900">✨ Thalita (Multilingue)</option>
+          </select>
+        </div>
+
         <!-- Seletor do Motor LLM (Ollama / Gemini / OpenAI) -->
         <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-1 gap-1.5">
           <span class="text-slate-400 text-[11px]">🧠 IA:</span>
@@ -908,6 +918,19 @@
       });
       const data = await res.json();
       if (data.domestic) updateDomesticHUD(data.domestic);
+    }
+
+    async function changeVoice(voice) {
+      await fetch('/api/audio/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ voice })
+      });
+      await fetch('/api/speak', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ text: 'Olá Tiago! Esta é a minha voz natural.' })
+      });
     }
 
     async function triggerStunt(stunt) {
