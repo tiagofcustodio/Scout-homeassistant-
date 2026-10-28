@@ -84,7 +84,7 @@ class HomeAssistantBridge:
             return self._entities_cache
 
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(verify=False, timeout=5.0) as client:
                 resp = await client.get(f"{self.ha_url}/api/states", headers=self._headers())
                 resp.raise_for_status()
                 states = resp.json()
@@ -124,7 +124,7 @@ class HomeAssistantBridge:
             payload.update(extra_data)
 
         try:
-            async with httpx.AsyncClient(timeout=6.0) as client:
+            async with httpx.AsyncClient(verify=False, timeout=6.0) as client:
                 resp = await client.post(
                     f"{self.ha_url}/api/services/{domain}/{service}",
                     headers=self._headers(),
@@ -152,23 +152,38 @@ class HomeAssistantBridge:
         """
         norm = _strip_accents(text)
 
-        # Verificar se contém verbos de ação doméstica + substantivos de dispositivos (ou nome de entidade conhecida)
+        # Mapeamento e normalização de plurais para singular
+        stem_map = {
+            "luzes": "luz",
+            "estores": "estore",
+            "persianas": "persiana",
+            "candeeiros": "candeeiro",
+            "lampadas": "lampada",
+            "tomadas": "tomada",
+            "interruptores": "interruptor",
+            "quartos": "quarto",
+            "salas": "sala",
+        }
+        stemmed_tokens = [stem_map.get(w, w) for w in re.split(r"[^a-z0-9]+", norm) if w]
+        norm_stemmed = " ".join(stemmed_tokens)
+
+        # Verificar se contém verbos de ação doméstica + substantivos de dispositivos
         turn_on_words = ["acende", "acender", "liga", "ligar", "ativa", "ativar", "abre", "abrir"]
         turn_off_words = ["apaga", "apagar", "desliga", "desligar", "desativa", "desativar", "fecha", "fechar"]
         home_nouns = [
-            "luz", "luzes", "candeeiro", "lampada", "fita led", "led", "tomada", "interruptor",
-            "televisao", "tv", "estore", "estores", "persiana", "persianas", "ar condicionado",
-            "aquecedor", "ventoinha", "ventilador", "portao", "porta", "cena", "quarto", "sala",
-            "cozinha", "escritorio", "wc", "casa de banho", "corredor", "varanda", "garagem",
+            "luz", "candeeiro", "lampada", "fita led", "led", "tomada", "interruptor",
+            "televisao", "tv", "estore", "persiana", "ar condicionado", "aquecedor",
+            "ventoinha", "ventilador", "portao", "porta", "cena", "quarto", "sala",
+            "cozinha", "escritorio", "wc", "casa de banho", "corredor", "escadas", "jantar", "exterior",
         ]
 
         # Ignorar comandos internos do próprio Scout ("liga visão noturna", "anda para a frente")
-        if any(w in norm for w in ["visao noturna", "infravermelho", "anda", "recua", "vira", "roda"]):
+        if any(w in norm for w in ["visao noturna", "infravermelho", "anda", "recua", "vira", "roda", "patrulha"]):
             return None
 
         is_on = any(re.search(rf"\b{w}\b", norm) for w in turn_on_words)
         is_off = any(re.search(rf"\b{w}\b", norm) for w in turn_off_words)
-        has_home_noun = any(n in norm for n in home_nouns)
+        has_home_noun = any(n in norm_stemmed for n in home_nouns)
 
         if not (is_on or is_off) or not has_home_noun:
             return None
@@ -183,36 +198,75 @@ class HomeAssistantBridge:
                 }
             return None
 
-        # Procurar a entidade do Home Assistant cujo nome amigável melhor corresponde à frase
-        best_ent: Optional[Dict[str, Any]] = None
-        best_score = 0.0
+        # Lista de divisões da casa
+        divisions = ["sala", "cozinha", "quarto", "santi", "escadas", "corredor", "wc", "jantar", "exterior"]
+        query_divisions = [d for d in divisions if d in norm_stemmed]
 
-        # Remover verbos e artigos para isolar o alvo (ex: "luz da sala")
-        stop_tokens = set(turn_on_words + turn_off_words + ["scout", "robo", "robot", "o", "a", "os", "as", "do", "da", "dos", "das", "no", "na", "por", "favor", "podes"])
-        query_tokens = [t for t in re.split(r"[^a-z0-9]+", norm) if t and t not in stop_tokens]
+        # Procurar a melhor entidade por pontuação semântica
+        best_ent: Optional[Dict[str, Any]] = None
+        best_score = -999.0
 
         for ent in entities:
-            ename_norm = _strip_accents(ent["name"])
-            eid_norm = _strip_accents(ent["entity_id"].split(".")[-1].replace("_", " "))
-            full_target = f"{ename_norm} {eid_norm}"
-            ent_tokens = set(re.split(r"[^a-z0-9]+", full_target))
+            ename_norm = " ".join(stem_map.get(w, w) for w in re.split(r"[^a-z0-9]+", _strip_accents(ent["name"])) if w)
+            eid_norm = " ".join(stem_map.get(w, w) for w in re.split(r"[^a-z0-9]+", _strip_accents(ent["entity_id"].replace("_", " "))) if w)
+            combined = f"{ename_norm} {eid_norm}"
 
-            overlap = sum(1.5 if qt in ename_norm else (1.0 if qt in ent_tokens else 0.0) for qt in query_tokens)
-            # Bonus de domínio
-            if ("luz" in norm or "candeeiro" in norm or "lampada" in norm) and ent["domain"] == "light":
-                overlap += 1.5
-            elif ("estore" in norm or "persiana" in norm) and ent["domain"] == "cover":
-                overlap += 1.8
-            elif ("tomada" in norm or "interruptor" in norm) and ent["domain"] == "switch":
-                overlap += 1.4
-            elif ("tv" in norm or "televisao" in norm) and ent["domain"] == "media_player":
-                overlap += 1.6
+            score = 0.0
 
-            if overlap > best_score:
-                best_score = overlap
+            # 1. Penalizar fortemente acessórios, impressoras, câmaras e scanners se o utilizador não os pediu explicitamente
+            ancillary = ["impressora", "creality", "3d", "tapo", "camera", "privacy", "scanner", "silenciar", "blu"]
+            ancillary_in_ent = [a for a in ancillary if a in combined]
+            if ancillary_in_ent and not any(a in norm_stemmed for a in ancillary_in_ent):
+                score -= 15.0
+            elif any(a in norm_stemmed for a in ancillary_in_ent):
+                score += 10.0
+
+            # 2. Divisão da Casa (ex: "sala", "cozinha", "quarto", etc.)
+            if query_divisions:
+                matched_div = any(d in combined for d in query_divisions)
+                if matched_div:
+                    score += 6.0
+                else:
+                    score -= 4.0
+
+            # 3. Tipo de Dispositivo (Luz vs Estore vs Tomada)
+            if "luz" in norm_stemmed or "candeeiro" in norm_stemmed or "lampada" in norm_stemmed:
+                if "luz" in ename_norm:
+                    score += 5.0
+                elif "luz" in eid_norm:
+                    score += 3.0
+                # Luz de teto tem prioridade máxima como iluminação principal da divisão
+                if "teto" in ename_norm:
+                    score += 2.5
+                if ent["domain"] == "cover":
+                    score -= 10.0
+            elif "estore" in norm_stemmed or "persiana" in norm_stemmed:
+                if ent["domain"] == "cover" or "estore" in combined:
+                    score += 8.0
+                else:
+                    score -= 10.0
+
+            # 4. Se não foi indicada divisão mas foi pedido no plural/geral (ex: "estores", "todas as luzes"), preferir entidades "todos"
+            if not query_divisions:
+                if "todo" in combined or "todos" in combined:
+                    score += 5.0
+
+            # 5. Overlap de palavras-chave da pesquisa
+            stop_words = set(turn_on_words + turn_off_words + ["scout", "robo", "robot", "o", "a", "os", "as", "do", "da", "dos", "das", "no", "na", "por", "favor", "podes"])
+            q_keywords = [t for t in stemmed_tokens if t not in stop_words]
+            for kw in q_keywords:
+                if kw in ancillary and kw in combined:
+                    score += 10.0  # Se o utilizador pediu explicitamente um acessório (ex: impressora)
+                elif kw in ename_norm:
+                    score += 2.5
+                elif kw in eid_norm:
+                    score += 1.0
+
+            if score > best_score:
+                best_score = score
                 best_ent = ent
 
-        if not best_ent or best_score < 1.4:
+        if not best_ent or best_score < 2.5:
             return None
 
         domain = best_ent["domain"]
@@ -235,6 +289,8 @@ class HomeAssistantBridge:
                 "matched": True,
                 "ok": True,
                 "entity": best_ent,
+                "device_name": friendly,
+                "entity_id": ent_id,
                 "service": f"{domain}.{service}",
                 "reply": f"Pronto, já {verb_done} {friendly} no Home Assistant!",
             }
