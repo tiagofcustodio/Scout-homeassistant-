@@ -1063,42 +1063,12 @@ class ScoutClient:
                 self.telemetry.speaker_playing = True
                 self.telemetry.last_action = "🔊 A reproduzir voz na coluna do Scout..."
 
-                # 1. Reprodução de alta fidelidade direta no hardware via ALSA (aplay sobre SSH)
-                def _play_on_hardware_speaker_sync(mp3_data: bytes) -> bool:
-                    try:
-                        in_c = av.open(io.BytesIO(mp3_data), format="mp3")
-                        resampler = av.AudioResampler(format="s16", layout="mono", rate=16000)
-                        pcm = bytearray()
-                        for frame in in_c.decode(audio=0):
-                            for rframe in resampler.resample(frame):
-                                pcm.extend(bytes(rframe.planes[0]))
-                        if not pcm:
-                            return False
-                        cmd = [
-                            "ssh.exe",
-                            "-o", "StrictHostKeyChecking=no",
-                            "-o", "ConnectTimeout=2",
-                            f"root@{self.telemetry.scout_ip}",
-                            "aplay", "-r", "16000", "-f", "S16_LE", "-c", "1", "-q"
-                        ]
-                        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        p.communicate(input=bytes(pcm), timeout=18)
-                        return p.returncode == 0
-                    except Exception as ex:
-                        print(f"[HardwareSpeaker] Info/Aviso aplay: {ex}")
-                        return False
-
-                # Executa a reprodução na coluna física do robô
-                hw_ok = await asyncio.to_thread(_play_on_hardware_speaker_sync, mp3_bytes)
-                if hw_ok:
-                    self._audio_seq += 1
-                    self.telemetry.speaker_frames_sent = self._audio_seq
-
-                # 2. Em paralelo, se houver subscritor TCPROS ativo (/SpeakerNode), envia também por ROS:
+                # Verifica se o subscritor oficial ROS (/SpeakerNode do robô) está ligado
                 with self._audio_lock:
                     has_subs = len(self._audio_subscribers) > 0
 
                 if has_subs:
+                    # Método Principal: Transmite áudio AAC via TCPROS diretamente para o nó oficial /SpeakerNode do Scout
                     def _encode_adts_sync(mp3_data: bytes) -> List[bytes]:
                         in_container = av.open(io.BytesIO(mp3_data), format="mp3")
                         out_buf = io.BytesIO()
@@ -1162,16 +1132,37 @@ class ScoutClient:
                                     self._audio_subscribers.remove(d)
                                 self.telemetry.speaker_subscribers = len(self._audio_subscribers)
 
-                            if i == 0 and self._audio_seq == 1:
-                                await asyncio.sleep(1.1)
-                                with self._audio_lock:
-                                    for conn in self._audio_subscribers:
-                                        try:
-                                            conn.sendall(pkt)
-                                        except Exception:
-                                            pass
+                            await asyncio.sleep(0.046)
+                else:
+                    # Método Fallback: Caso o /SpeakerNode não esteja subscrito, envia diretamente para aplay em 48000Hz stereo
+                    def _play_on_hardware_speaker_sync(mp3_data: bytes) -> bool:
+                        try:
+                            in_c = av.open(io.BytesIO(mp3_data), format="mp3")
+                            resampler = av.AudioResampler(format="s16", layout="stereo", rate=48000)
+                            pcm = bytearray()
+                            for frame in in_c.decode(audio=0):
+                                for rframe in resampler.resample(frame):
+                                    pcm.extend(bytes(rframe.planes[0]))
+                            if not pcm:
+                                return False
+                            cmd = [
+                                "ssh.exe",
+                                "-o", "StrictHostKeyChecking=no",
+                                "-o", "ConnectTimeout=2",
+                                f"root@{self.telemetry.scout_ip}",
+                                "aplay", "-r", "48000", "-f", "S16_LE", "-c", "2", "-q"
+                            ]
+                            p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            p.communicate(input=bytes(pcm), timeout=18)
+                            return p.returncode == 0
+                        except Exception as ex:
+                            print(f"[HardwareSpeaker] Info/Aviso aplay: {ex}")
+                            return False
 
-                            await asyncio.sleep(0.060)
+                    hw_ok = await asyncio.to_thread(_play_on_hardware_speaker_sync, mp3_bytes)
+                    if hw_ok:
+                        self._audio_seq += 1
+                        self.telemetry.speaker_frames_sent = self._audio_seq
 
                 self.telemetry.speaker_playing = False
                 if self._awake_until > time.time() - 5.0:

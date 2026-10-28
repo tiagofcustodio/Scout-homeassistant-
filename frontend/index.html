@@ -119,8 +119,8 @@
         </div>
 
         <!-- Botão Som da Coluna Web / App -->
-        <button id="browserVoiceBtn" onclick="toggleBrowserAudio()" class="flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-600/80 text-emerald-300 text-[11px] font-bold px-2.5 py-1 rounded-xl shadow cursor-pointer hover:bg-emerald-900/80 transition-all" title="Ativar/Desativar som falado nas colunas do PC/Telemóvel">
-          <span id="browserVoiceIcon">🔊</span> Coluna: Ligada
+        <button id="browserVoiceBtn" onclick="toggleBrowserAudio()" class="flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-600/80 text-emerald-300 text-[11px] font-bold px-2.5 py-1 rounded-xl shadow cursor-pointer hover:bg-emerald-900/80 transition-all" title="Ativar/Desativar som falado no navegador do PC/Telemóvel">
+          <span id="browserVoiceIcon">🔊</span> Áudio Web: Ligado
         </button>
 
         <!-- Seletor do Motor LLM (Ollama / Gemini / OpenAI) -->
@@ -924,11 +924,11 @@
       const btn = document.getElementById('browserVoiceBtn');
       if (browserAudioEnabled) {
         btn.className = 'flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-600/80 text-emerald-300 text-[11px] font-bold px-2.5 py-1 rounded-xl shadow cursor-pointer hover:bg-emerald-900/80 transition-all';
-        btn.innerHTML = '<span>🔊</span> Coluna: Ligada';
-        playBrowserVoice('Som das respostas ativado!');
+        btn.innerHTML = '<span id="browserVoiceIcon">🔊</span> Áudio Web: Ligado';
+        playBrowserVoice('Áudio do navegador ativado!');
       } else {
         btn.className = 'flex items-center gap-1.5 bg-slate-900/80 border border-slate-700/80 text-slate-400 text-[11px] font-bold px-2.5 py-1 rounded-xl shadow cursor-pointer hover:bg-slate-800/80 transition-all';
-        btn.innerHTML = '<span>🔇</span> Coluna: Mudo';
+        btn.innerHTML = '<span id="browserVoiceIcon">🔇</span> Áudio Web: Mudo';
         if (browserVoiceAudio) {
           browserVoiceAudio.pause();
           browserVoiceAudio = null;
