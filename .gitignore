@@ -4,6 +4,8 @@ profiles/
 scout_messages.log
 *.wav
 scout_live_snapshot.jpg
+firmware_backup/
+tools/generated_sounds/
 
 # Python cache e ambientes virtuais
 __pycache__/
