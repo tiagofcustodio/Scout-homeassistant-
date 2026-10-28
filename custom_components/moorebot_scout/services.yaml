@@ -1,0 +1,41 @@
+speak:
+  name: Falar na Coluna do Scout (Megafone)
+  description: Faz o Moorebot Scout falar uma frase em voz alta pela sua coluna física.
+  fields:
+    text:
+      name: Texto a falar
+      description: Frase em português que o Scout vai reproduzir.
+      required: true
+      example: "Olá! O jantar está na mesa!"
+      selector:
+        text:
+
+ask_ai:
+  name: Conversar / Mandar Comando ao Cérebro IA do Scout
+  description: Envia uma pergunta ou ordem para o Cérebro IA (Ollama) do Scout com visão da câmara.
+  fields:
+    prompt:
+      name: Pergunta ou Comando
+      description: Ex. "O que estás a ver na sala?" ou "Começa a patrulhar"
+      required: true
+      example: "Olha pela câmara e diz-me se está alguém na sala"
+      selector:
+        text:
+
+stunt:
+  name: Executar Coreografia Mecanum
+  description: Executa uma acrobacia física nas rodas Mecanum com voz.
+  fields:
+    stunt:
+      name: Coreografia
+      required: true
+      default: "dance"
+      selector:
+        select:
+          options:
+            - "dance"
+            - "salute"
+            - "spin360"
+            - "celebrate"
+            - "scan_room"
+            - "wiggle"

@@ -1,0 +1,15 @@
+# Credenciais e variáveis locais
+.env
+profiles/
+scout_messages.log
+*.wav
+scout_live_snapshot.jpg
+
+# Python cache e ambientes virtuais
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/

@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Moorebot Scout · AI Companion & Smart Home Hub</title>
+  <link rel="manifest" href="/manifest.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+    :root {
+      --bg-dark: #060911;
+      --card-bg: rgba(15, 23, 42, 0.78);
+      --card-border: rgba(51, 65, 85, 0.55);
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image:
+        radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.10) 0px, transparent 45%),
+        radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.10) 0px, transparent 45%),
+        radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.07) 0px, transparent 50%);
+      color: #e2e8f0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    .mono-val {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+    }
+
+    .btn-ctrl {
+      user-select: none;
+      touch-action: manipulation;
+      transition: all 0.14s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn-ctrl:active {
+      transform: scale(0.93);
+    }
+
+    /* Flash de fotografia */
+    @keyframes shutterFlash {
+      0% { opacity: 0.95; }
+      100% { opacity: 0; }
+    }
+    .flash-anim {
+      animation: shutterFlash 0.45s ease-out forwards;
+    }
+
+    /* Scrollbar fina moderna */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.4); border-radius: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.7); border-radius: 8px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(6, 182, 212, 0.7); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-cyan-500 selection:text-slate-950">
+
+  <!-- ===================================================================== -->
+  <!-- BARRA SUPERIOR (HEADER FUTURISTA) -->
+  <!-- ===================================================================== -->
+  <header class="sticky top-0 z-30 glass-card border-b border-slate-800/80 px-4 py-2.5">
+    <div class="max-w-[1680px] mx-auto flex flex-wrap items-center justify-between gap-3">
+
+      <!-- Marca & Estado de Ligação -->
+      <div class="flex items-center gap-3">
+        <div class="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 border border-cyan-500/40 shadow-inner">
+          <span class="text-lg">🤖</span>
+          <span id="statusDot" class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 ring-4 ring-slate-950 animate-pulse"></span>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-extrabold tracking-tight bg-gradient-to-r from-cyan-300 via-sky-200 to-indigo-300 bg-clip-text text-transparent">
+              MOOREBOT SCOUT
+            </h1>
+            <span id="connBadge" class="text-[10px] bg-emerald-950/90 border border-emerald-700/60 text-emerald-300 px-2 py-0.5 rounded-full mono-val">
+              TCPROS 192.168.1.115
+            </span>
+            <span id="headerPersonBadge" class="text-[10px] bg-indigo-950/90 border border-indigo-700/60 text-indigo-200 px-2.5 py-0.5 rounded-full mono-val">
+              👤 A identificar...
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400">Robô Doméstico IA · Mapeamento Radar 2D · Memória Biométrica · Casa Inteligente</p>
+        </div>
+      </div>
+
+      <!-- Controlos Rápidos de Topo: Personalidade IA + Modelo + Home Assistant -->
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+
+        <!-- Seletor de Personalidade do Robô -->
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-1 gap-1.5">
+          <span class="text-slate-400 text-[11px]">🎭 Personalidade:</span>
+          <select id="personalitySelect" onchange="changePersonality(this.value)" class="bg-transparent text-amber-300 font-semibold focus:outline-none cursor-pointer">
+            <option value="friendly" class="bg-slate-900">🤖 Companheiro Amigável</option>
+            <option value="butler" class="bg-slate-900">🎩 Mordomo Jarvis</option>
+            <option value="sentinel" class="bg-slate-900">🛡️ Sentinela Tático</option>
+            <option value="comedian" class="bg-slate-900">😂 Comediante Sarcástico</option>
+            <option value="pet" class="bg-slate-900">🐾 Mascote Curioso</option>
+          </select>
+        </div>
+
+        <!-- Seletor do Motor LLM (Ollama / Gemini / OpenAI) -->
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-1 gap-1.5">
+          <span class="text-slate-400 text-[11px]">🧠 IA:</span>
+          <select id="aiProviderSelect" onchange="changeAIProvider()" class="bg-transparent text-cyan-300 font-semibold focus:outline-none cursor-pointer">
+            <option value="ollama|llama3.2:3b" class="bg-slate-900" selected>Ollama (llama3.2:3b · Rápido)</option>
+            <option value="ollama|gemma2:2b" class="bg-slate-900">Ollama (gemma2:2b · Ultra Leve)</option>
+            <option value="ollama|llama3:latest" class="bg-slate-900">Ollama (llama3:8b)</option>
+            <option value="ollama|gemma2:latest" class="bg-slate-900">Ollama (gemma2:9b)</option>
+            <option value="ollama|qwen3:14b" class="bg-slate-900">Ollama (qwen3:14b)</option>
+            <option value="gemini|gemini-3.8-flash" class="bg-slate-900">Google Gemini Flash</option>
+            <option value="openai|gpt-4o-mini" class="bg-slate-900">OpenAI GPT-4o-mini</option>
+          </select>
+        </div>
+
+        <!-- Link Home Assistant -->
+        <a href="/ha" class="bg-gradient-to-r from-cyan-600/30 to-indigo-600/30 hover:from-cyan-600/50 hover:to-indigo-600/50 border border-cyan-500/50 px-3 py-1.5 rounded-xl text-cyan-200 font-semibold transition flex items-center gap-1.5">
+          <span>🏠</span> <span>Modo Home Assistant</span>
+        </a>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- CONTEÚDO PRINCIPAL (GRELHA DE 12 COLUNAS) -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 max-w-[1680px] w-full mx-auto">
+
+    <!-- =================================================================== -->
+    <!-- COLUNA ESQUERDA (7 COLUNAS): CÂMARA SCI-FI + CONDUÇÃO + MAPA 2D -->
+    <!-- =================================================================== -->
+    <section class="lg:col-span-7 flex flex-col gap-4">
+
+      <!-- 1. VIEWPORT DA CÂMARA COM HUD SCI-FI E BARRA DE AÇÕES RÁPIDAS -->
+      <div id="cameraContainer" class="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800/90 shadow-2xl aspect-video flex items-center justify-center group">
+        <img id="videoStream" src="/api/video.mjpeg" alt="Scout Live Camera" class="w-full h-full object-cover" />
+
+        <!-- Efeito Flash ao tirar fotografia -->
+        <div id="cameraFlash" class="pointer-events-none absolute inset-0 bg-white opacity-0"></div>
+
+        <!-- Retículo HUD Sci-Fi (Pode ser ligado/desligado) -->
+        <div id="sciFiHudOverlay" class="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <!-- Cantos do visor tático -->
+          <div class="absolute top-12 left-5 w-6 h-6 border-t-2 border-l-2 border-cyan-400/40 rounded-tl"></div>
+          <div class="absolute top-12 right-5 w-6 h-6 border-t-2 border-r-2 border-cyan-400/40 rounded-tr"></div>
+          <div class="absolute bottom-12 left-5 w-6 h-6 border-b-2 border-l-2 border-cyan-400/40 rounded-bl"></div>
+          <div class="absolute bottom-12 right-5 w-6 h-6 border-b-2 border-r-2 border-cyan-400/40 rounded-br"></div>
+          <!-- Mira central subtil -->
+          <div class="w-10 h-10 rounded-full border border-cyan-400/25 flex items-center justify-center">
+            <div class="w-1.5 h-1.5 rounded-full bg-cyan-400/50"></div>
+          </div>
+        </div>
+
+        <!-- Topo Esquerdo: Estado Ao Vivo + Modo Sentinela / Patrulha -->
+        <div class="absolute top-3 left-3 flex flex-wrap items-center gap-2">
+          <div class="bg-slate-950/80 border border-slate-800 px-2.5 py-1 rounded-full backdrop-blur-md flex items-center gap-1.5 text-[11px] mono-val">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+            <span id="hudRes" class="text-slate-200 font-semibold">1920x1080</span>
+          </div>
+          <div id="hudSentryBadge" class="hidden bg-rose-950/90 border border-rose-600 text-rose-200 px-2.5 py-1 rounded-full text-[11px] font-bold mono-val animate-pulse">
+            🛡️ SENTINELA ATIVO
+          </div>
+          <div id="hudPatrolBadge" class="hidden bg-emerald-950/90 border border-emerald-500 text-emerald-200 px-2.5 py-1 rounded-full text-[11px] font-bold mono-val animate-pulse">
+            🚓 EM PATRULHA
+          </div>
+        </div>
+
+        <!-- Topo Direito: Botões Rápidos de Câmara (Foto, Visão IA, Sentinela, IR, Fullscreen) -->
+        <div class="absolute top-3 right-3 flex flex-wrap items-center gap-1.5">
+          <button onclick="takeSnapshotUI()" class="btn-ctrl bg-slate-900/85 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500 text-xs px-3 py-1.5 rounded-full backdrop-blur-md font-semibold text-cyan-200 flex items-center gap-1 shadow">
+            <span>📸</span> <span>Foto</span>
+          </button>
+          <button onclick="askWhatDoYouSee()" class="btn-ctrl bg-slate-900/85 hover:bg-indigo-950 border border-slate-700 hover:border-indigo-500 text-xs px-3 py-1.5 rounded-full backdrop-blur-md font-semibold text-indigo-200 flex items-center gap-1 shadow" title="Pedir à IA para descrever o que está a ver agora">
+            <span>👁️</span> <span>O que vês?</span>
+          </button>
+          <button onclick="toggleSentryUI()" id="camSentryBtn" class="btn-ctrl bg-slate-900/85 hover:bg-rose-950 border border-slate-700 text-xs px-3 py-1.5 rounded-full backdrop-blur-md font-semibold text-slate-200 flex items-center gap-1 shadow">
+            <span>🛡️</span> <span id="camSentryBtnLabel">Sentinela: OFF</span>
+          </button>
+          <button onclick="toggleIR()" id="irBtn" class="btn-ctrl bg-slate-900/85 hover:bg-amber-950 border border-slate-700 text-xs px-3 py-1.5 rounded-full backdrop-blur-md font-semibold text-slate-200 shadow">
+            🌙 IR: OFF
+          </button>
+          <button onclick="toggleCameraFullscreen()" class="btn-ctrl bg-slate-900/85 hover:bg-slate-800 border border-slate-700 text-xs px-2.5 py-1.5 rounded-full backdrop-blur-md text-slate-300" title="Ecrã Inteiro">
+            ⛶
+          </button>
+        </div>
+
+        <!-- Base da Câmara: Telemetria Rápida ToF + Microfone + Última Ação -->
+        <div class="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+          <div class="bg-slate-950/85 border border-slate-800/90 text-xs px-3 py-1.5 rounded-full backdrop-blur-md flex items-center gap-3 mono-val">
+            <span id="hudTof" class="text-emerald-300 font-semibold">📏 ToF: 0.25m</span>
+            <span class="text-slate-600">|</span>
+            <span id="hudImu" class="text-cyan-300">🧭 Pitch: 0.0°</span>
+            <span class="text-slate-600">|</span>
+            <span id="hudAction" class="text-amber-300 font-medium">Pronto</span>
+          </div>
+
+          <div id="hudVoicePill" class="bg-slate-950/85 border border-cyan-800/70 text-xs px-3 py-1.5 rounded-full backdrop-blur-md text-cyan-200 max-w-md truncate mono-val">
+            🎤 Diga "Scout" para falar
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. COCKPIT DE NAVEGAÇÃO MECANUM (JOYSTICK ANALÓGICO 360° + D-PAD + COREOGRAFIAS) -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+
+        <!-- Painel de Condução Mecanum (7 cols) -->
+        <div class="md:col-span-7 glass-card rounded-2xl p-4 flex flex-col justify-between">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 class="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🕹️</span> <span>Cockpit Mecanum (Joystick + D-Pad + WASD)</span>
+              </h2>
+            </div>
+            <!-- Seletor de Mudança de Velocidade -->
+            <div class="flex items-center gap-1 bg-slate-950/90 border border-slate-800 rounded-xl p-1 text-[11px] mono-val">
+              <button onclick="setDriveGear(0.45, 1)" id="gearBtn1" class="px-2 py-0.5 rounded-lg text-slate-400 hover:text-white transition">1ª Lenta</button>
+              <button onclick="setDriveGear(0.75, 2)" id="gearBtn2" class="px-2 py-0.5 rounded-lg bg-cyan-600 text-white font-bold transition">2ª Normal</button>
+              <button onclick="setDriveGear(1.0, 3)" id="gearBtn3" class="px-2 py-0.5 rounded-lg text-slate-400 hover:text-white transition">3ª Turbo</button>
+            </div>
+          </div>
+
+          <!-- Área Dupla: Joystick Analógico Virtual 360° + Botões Mecanum -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center my-auto">
+
+            <!-- Joystick Virtual 360° (Arrastar com Rato ou Dedo) -->
+            <div class="flex flex-col items-center justify-center">
+              <div id="joystickZone" class="relative w-36 h-36 rounded-full bg-slate-950/90 border-2 border-slate-800 shadow-inner flex items-center justify-center touch-none select-none cursor-grab active:cursor-grabbing">
+                <!-- Círculos guia do radar joystick -->
+                <div class="w-24 h-24 rounded-full border border-slate-800/70 pointer-events-none"></div>
+                <div class="absolute w-full h-[1px] bg-slate-800/60 pointer-events-none"></div>
+                <div class="absolute h-full w-[1px] bg-slate-800/60 pointer-events-none"></div>
+                <!-- Manípulo do Joystick -->
+                <div id="joystickKnob" class="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 to-indigo-600 shadow-lg shadow-cyan-500/30 border-2 border-white/60 flex items-center justify-center text-xs font-bold text-white pointer-events-none transition-transform duration-75">
+                  360°
+                </div>
+              </div>
+              <span id="joystickReadout" class="text-[10px] text-slate-400 mono-val mt-1.5">Arraste para deslizar 360°</span>
+            </div>
+
+            <!-- D-Pad Tático de 9 Botões (Com Rotações e Diagonais) -->
+            <div class="grid grid-cols-3 gap-1.5 w-full max-w-[210px] mx-auto">
+              <button onpointerdown="driveHold(0, 0, 0.8)" onpointerup="sendStop()" onpointerleave="sendStop()" class="btn-ctrl bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 rounded-xl py-2.5 text-xs font-bold text-cyan-300">↺ Rodar E</button>
+              <button onpointerdown="driveHold(0.40, 0, 0)" onpointerup="sendStop()" onpointerleave="sendStop()" class="btn-ctrl bg-cyan-950/90 hover:bg-cyan-800 border border-cyan-700/70 rounded-xl py-2.5 text-base font-bold text-white">⬆️</button>
+              <button onpointerdown="driveHold(0, 0, -0.8)" onpointerup="sendStop()" onpointerleave="sendStop()" class="btn-ctrl bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 rounded-xl py-2.5 text-xs font-bold text-cyan-300">↻ Rodar D</button>
+
+              <button onpointerdown="driveHold(0, 0.40, 0)" onpointerup="sendStop()" onpointerleave="sendStop()" class="btn-ctrl bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 rounded-xl py-2.5 text-base" title="Strafe Esquerda">⬅️</button>
+              <button onclick="sendStop()" class="btn-ctrl bg-rose-600 hover:bg-rose-500 text-white rounded-xl py-2.5 font-extrabold text-[11px] shadow-lg shadow-rose-600/25">PARAR</button>
+              <button onpointerdown="driveHold(0, -0.40, 0)" onpointerup="sendStop()" onpointerleave="sendStop()" class="btn-ctrl bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 rounded-xl py-2.5 text-base" title="Strafe Direita">➡️</button>
+
+              <button onpointerdown="driveHold(0.28, 0.28, 0)" onpointerup="sendStop()" onpointerleave="sendStop()" class="btn-ctrl bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl py-2 text-[11px] text-slate-300">↖️ Diag</button>
+              <button onpointerdown="driveHold(-0.40, 0, 0)" onpointerup="sendStop()" onpointerleave="sendStop()" class="btn-ctrl bg-cyan-950/90 hover:bg-cyan-800 border border-cyan-700/70 rounded-xl py-2 text-base font-bold text-white">⬇️</button>
+              <button onpointerdown="driveHold(0.28, -0.28, 0)" onpointerup="sendStop()" onpointerleave="sendStop()" class="btn-ctrl bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl py-2 text-[11px] text-slate-300">↗️ Diag</button>
+            </div>
+
+          </div>
+
+          <!-- Rodapé de Ligação IP + Comando Xbox Resumo -->
+          <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+            <div class="flex items-center gap-1.5">
+              <span>IP Scout:</span>
+              <input id="scoutIpInput" type="text" value="192.168.1.115" class="w-28 bg-slate-950 border border-slate-700 rounded-lg px-2 py-0.5 text-slate-200 mono-val text-[11px]" />
+              <label class="flex items-center gap-1 cursor-pointer ml-1">
+                <input id="mockModeCheckbox" type="checkbox" onchange="saveRobotConfig()" class="rounded bg-slate-800" /> Sim
+              </label>
+              <button onclick="saveRobotConfig()" class="bg-slate-800 hover:bg-cyan-700 text-cyan-200 hover:text-white px-2 py-0.5 rounded-lg font-semibold transition">Ligar</button>
+            </div>
+            <div id="xboxStatusBadge" class="text-[10px] bg-slate-900 border border-slate-700 px-2.5 py-0.5 rounded-full text-slate-400 mono-val">
+              🎮 Xbox: Desligado
+            </div>
+          </div>
+        </div>
+
+        <!-- Painel de Coreografias, Acrobacias & Ações Divertidas (5 cols) -->
+        <div class="md:col-span-5 glass-card rounded-2xl p-4 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2.5">
+              <h2 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>💃</span> <span>Acrobacias & Emotes do Scout</span>
+              </h2>
+              <span id="stuntStatusBadge" class="text-[10px] bg-amber-950/80 border border-amber-700/50 text-amber-300 px-2 py-0.5 rounded-full mono-val">Pronto</span>
+            </div>
+
+            <!-- Grelha de 6 Coreografias Físicas + Voz -->
+            <div class="grid grid-cols-2 gap-2 text-xs font-semibold mb-3">
+              <button onclick="triggerStunt('dance')" class="btn-ctrl bg-gradient-to-br from-amber-500/20 to-rose-500/20 hover:from-amber-500/35 hover:to-rose-500/35 border border-amber-500/40 rounded-xl p-2.5 text-left flex items-center gap-2 text-amber-200">
+                <span class="text-lg">💃</span>
+                <div>
+                  <div class="font-bold">Dançar</div>
+                  <div class="text-[10px] text-slate-400 font-normal">Ritmo Mecanum</div>
+                </div>
+              </button>
+
+              <button onclick="triggerStunt('salute')" class="btn-ctrl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/35 hover:to-blue-500/35 border border-cyan-500/40 rounded-xl p-2.5 text-left flex items-center gap-2 text-cyan-200">
+                <span class="text-lg">🫡</span>
+                <div>
+                  <div class="font-bold">Saudação</div>
+                  <div class="text-[10px] text-slate-400 font-normal">Vénia + Voz</div>
+                </div>
+              </button>
+
+              <button onclick="triggerStunt('spin360')" class="btn-ctrl bg-gradient-to-br from-purple-500/20 to-indigo-500/20 hover:from-purple-500/35 hover:to-indigo-500/35 border border-purple-500/40 rounded-xl p-2.5 text-left flex items-center gap-2 text-purple-200">
+                <span class="text-lg">🌀</span>
+                <div>
+                  <div class="font-bold">Pirueta 360°</div>
+                  <div class="text-[10px] text-slate-400 font-normal">Giro Completo</div>
+                </div>
+              </button>
+
+              <button onclick="triggerStunt('celebrate')" class="btn-ctrl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/35 hover:to-teal-500/35 border border-emerald-500/40 rounded-xl p-2.5 text-left flex items-center gap-2 text-emerald-200">
+                <span class="text-lg">🎉</span>
+                <div>
+                  <div class="font-bold">Festejar</div>
+                  <div class="text-[10px] text-slate-400 font-normal">Vitória + Som</div>
+                </div>
+              </button>
+
+              <button onclick="triggerStunt('scan_room')" class="btn-ctrl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl p-2 text-left flex items-center gap-2 text-slate-200">
+                <span class="text-base">🔍</span>
+                <div>
+                  <div class="font-bold text-[11px]">Olhar Sala</div>
+                  <div class="text-[9px] text-slate-400 font-normal">Scan E/D</div>
+                </div>
+              </button>
+
+              <button onclick="triggerStunt('wiggle')" class="btn-ctrl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl p-2 text-left flex items-center gap-2 text-slate-200">
+                <span class="text-base">🐾</span>
+                <div>
+                  <div class="font-bold text-[11px]">Abanar Feliz</div>
+                  <div class="text-[9px] text-slate-400 font-normal">Modo Mascote</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Megafone Rápido (Falar direto na coluna do Scout) -->
+          <div class="pt-2 border-t border-slate-800/80">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">📢 Megafone Direto (Voz no Scout)</div>
+            <div class="flex gap-1.5">
+              <input id="quickSpeakInput" type="text" placeholder="Escreva para o Scout dizer em voz alta..." onkeydown="if(event.key==='Enter') sendQuickSpeak()" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-amber-400" />
+              <button onclick="sendQuickSpeak()" class="btn-ctrl bg-amber-600 hover:bg-amber-500 text-slate-950 font-extrabold px-3 py-1.5 rounded-xl text-xs">
+                🔊 Falar
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 3. MAPA 2D RADAR SLAM DA CASA & CONTROLO DE PATRULHA AUTÓNOMA -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🗺️</span> <span>Mapa Radar 2D da Casa & Patrulha Autónoma</span>
+            </h3>
+            <p id="patrolStateText" class="text-[11px] text-slate-400 mono-val">Estado: Parado (Mapeamento passivo ativo)</p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button onclick="adjustMapZoom(1.25)" class="btn-ctrl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs px-2.5 py-1.5 rounded-xl text-slate-200 font-bold" title="Aproximar Mapa">➕ Zoom</button>
+            <button onclick="adjustMapZoom(0.8)" class="btn-ctrl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs px-2.5 py-1.5 rounded-xl text-slate-200 font-bold" title="Afastar Mapa">➖</button>
+            <button id="patrolToggleBtn" onclick="togglePatrol()" class="btn-ctrl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl shadow-lg shadow-emerald-600/20">
+              🚓 Iniciar Patrulha
+            </button>
+            <button onclick="resetHouseMap()" title="Limpar e criar novo mapa" class="btn-ctrl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs px-2.5 py-1.5 rounded-xl">
+              🧹 Limpar
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
+          <!-- Canvas 2D Radar SLAM (8 cols) -->
+          <div class="md:col-span-8 relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800">
+            <canvas id="houseMapCanvas" width="600" height="230" class="w-full h-[220px] block"></canvas>
+            <div class="absolute bottom-2 left-2.5 right-2.5 flex justify-between text-[10px] mono-val text-slate-300 pointer-events-none">
+              <span id="mapStatsArea" class="bg-slate-900/90 border border-slate-800 px-2.5 py-0.5 rounded-lg">Área: 0.00 m² · Dist: 0.00 m</span>
+              <span id="mapStatsPose" class="bg-slate-900/90 border border-slate-800 px-2.5 py-0.5 rounded-lg text-cyan-300">X: 0.00m Y: 0.00m (0°)</span>
+            </div>
+          </div>
+
+          <!-- Estado do Comando Xbox em Tempo Real (4 cols) -->
+          <div class="md:col-span-4 bg-slate-950/85 border border-slate-800/90 rounded-xl p-3 flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-lime-400 uppercase tracking-wider">🎮 Comando Xbox</span>
+              <span id="xboxGear" class="text-[11px] bg-lime-950 border border-lime-700 text-lime-300 px-2 py-0.5 rounded-full font-bold mono-val">75%</span>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5 text-center text-xs mono-val my-1">
+              <div class="bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                <div class="text-[9px] text-slate-400">Stick Esq (Move)</div>
+                <div id="xboxLeftStick" class="text-lime-300 font-bold">0.0 , 0.0</div>
+              </div>
+              <div class="bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                <div class="text-[9px] text-slate-400">Rot (RX / LT-RT)</div>
+                <div id="xboxRightStick" class="text-cyan-300 font-bold">0.0</div>
+              </div>
+            </div>
+            <div id="xboxLastCmd" class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[10px] text-slate-300 mono-val truncate my-1">
+              Ligue comando Xbox (USB / BT)
+            </div>
+            <div class="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-slate-400">
+              <div>🟢 <b>A:</b> Saudação</div>
+              <div>🔴 <b>B:</b> Travão</div>
+              <div>🔵 <b>X:</b> Visão IR</div>
+              <div>🟡 <b>Y:</b> Patrulha</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- COLUNA DIREITA (5 COLUNAS): ABAS INTELIGENTES DO COMPANHEIRO IA -->
+    <!-- =================================================================== -->
+    <aside class="lg:col-span-5 flex flex-col gap-4">
+
+      <!-- Barra de Navegação por Abas (Tabs) -->
+      <div class="glass-card rounded-2xl p-1.5 grid grid-cols-4 gap-1 text-xs font-bold">
+        <button onclick="switchRightTab('chat')" id="tabBtn_chat" class="py-2 px-2 rounded-xl bg-cyan-600 text-white shadow transition flex items-center justify-center gap-1">
+          <span>💬</span> <span>Chat & Voz</span>
+        </button>
+        <button onclick="switchRightTab('domestic')" id="tabBtn_domestic" class="py-2 px-2 rounded-xl text-slate-300 hover:bg-slate-800/70 transition flex items-center justify-center gap-1">
+          <span>🛡️</span> <span>Casa & Fotos</span>
+        </button>
+        <button onclick="switchRightTab('people')" id="tabBtn_people" class="py-2 px-2 rounded-xl text-slate-300 hover:bg-slate-800/70 transition flex items-center justify-center gap-1">
+          <span>👤</span> <span>Pessoas</span>
+        </button>
+        <button onclick="switchRightTab('sensors')" id="tabBtn_sensors" class="py-2 px-2 rounded-xl text-slate-300 hover:bg-slate-800/70 transition flex items-center justify-center gap-1">
+          <span>📡</span> <span>Sensores</span>
+        </button>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- ABA 1: CHAT IA, MICROFONE DO SCOUT & SOUNDBOARD DE FRASES -->
+      <!-- ================================================================= -->
+      <div id="tabPanel_chat" class="flex flex-col gap-4 flex-1">
+
+        <!-- Estado em Tempo Real do Microfone & Coluna Física do Scout -->
+        <div class="glass-card rounded-2xl p-3.5 border border-cyan-900/50">
+          <div class="flex items-center justify-between mb-2">
+            <span id="s_mic_state" class="text-xs font-bold text-cyan-300">🎤 Diga "Scout" para conversar</span>
+            <div class="flex items-center gap-2">
+              <button onclick="wakeScoutNow()" class="btn-ctrl text-[11px] bg-emerald-900/80 hover:bg-emerald-700 border border-emerald-500/70 px-2.5 py-0.5 rounded-lg text-emerald-200 font-semibold">
+                🟢 Acordar 30s
+              </button>
+            </div>
+          </div>
+
+          <!-- VU Meter do Microfone -->
+          <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden mb-1.5 border border-slate-800">
+            <div id="micVuBar" class="bg-gradient-to-r from-emerald-400 via-cyan-400 to-rose-500 h-full transition-all duration-100" style="width: 10%"></div>
+          </div>
+          <div class="flex justify-between text-[10px] text-slate-400 mono-val mb-2.5">
+            <span id="s_mic_last_heard" class="truncate max-w-[70%]">Última frase: "A escutar..."</span>
+            <span id="s_mic_level">RMS: 0.0</span>
+          </div>
+
+          <!-- Sliders rápidos de Volume da Coluna e Sensibilidade -->
+          <div class="grid grid-cols-2 gap-2 text-[11px]">
+            <div class="bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800 flex items-center gap-2">
+              <span>🔊 Coluna:</span>
+              <input id="s_spk_vol_slider" type="range" min="10" max="200" step="10" value="140" onchange="updateAudioSettings()" oninput="document.getElementById('s_spk_vol_label').textContent = this.value + '%'" class="flex-1 accent-cyan-400 cursor-pointer" />
+              <span id="s_spk_vol_label" class="font-bold text-cyan-300 mono-val w-9 text-right">140%</span>
+            </div>
+            <div class="bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800 flex items-center gap-2">
+              <span>🎤 Sensib:</span>
+              <input id="s_mic_sens_slider" type="range" min="10" max="100" step="5" value="85" onchange="updateAudioSettings()" oninput="document.getElementById('s_mic_sens_label').textContent = this.value + '%'" class="flex-1 accent-emerald-400 cursor-pointer" />
+              <span id="s_mic_sens_label" class="font-bold text-emerald-300 mono-val w-9 text-right">85%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Janela de Conversa & Log Completo de Mensagens -->
+        <div class="glass-card rounded-2xl p-4 flex flex-col flex-1 min-h-[340px]">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-2.5">
+            <div>
+              <h2 class="text-xs font-bold text-cyan-400 uppercase tracking-wider">💬 Conversa & Registo de Voz</h2>
+            </div>
+            <div class="flex items-center gap-3 text-xs text-slate-300">
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" id="speakOnScoutCheck" checked class="rounded bg-slate-800" />
+                🔊 Falar no Scout
+              </label>
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" id="sendVisionCheck" checked class="rounded bg-slate-800" />
+                📷 Visão IA
+              </label>
+            </div>
+          </div>
+
+          <div id="chatLog" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs mb-3 max-h-[310px]">
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-3 text-slate-200">
+              <span class="font-bold text-cyan-400 block mb-0.5">🤖 Moorebot Scout IA</span>
+              Olá! Podes falar comigo diretamente pelo microfone do robô dizendo <b>"Scout"</b>, usar um comando Xbox, ou escrever aqui em baixo!
+            </div>
+          </div>
+
+          <!-- Barra de Envio de Chat / Voz no Browser -->
+          <div class="flex gap-2">
+            <button onclick="toggleVoiceRecognition()" id="micBtn" class="btn-ctrl bg-cyan-600 hover:bg-cyan-500 text-white px-3.5 py-2 rounded-xl font-semibold text-sm shadow" title="Ditar no navegador">
+              🎤
+            </button>
+            <input id="chatInput" type="text" placeholder="Pergunte algo, peça para dançar, patrulhar ou ligar luzes..." onkeydown="if(event.key==='Enter') sendChat()" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-cyan-400" />
+            <button onclick="sendChat()" class="btn-ctrl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 px-4 py-2 rounded-xl text-xs font-bold text-white shadow">
+              Enviar
+            </button>
+          </div>
+        </div>
+
+        <!-- Soundboard de Frases Rápidas Domésticas -->
+        <div class="glass-card rounded-2xl p-3.5">
+          <div class="text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-2">🔊 Soundboard Familiar (1 Clique = O Scout Fala na Sala)</div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[11px]">
+            <button onclick="speakPreset('O jantar está na mesa! Venham comer!')" class="btn-ctrl bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl px-2.5 py-2 text-left truncate">🍕 Jantar na mesa!</button>
+            <button onclick="speakPreset('Olá! Sejam muito bem-vindos a nossa casa!')" class="btn-ctrl bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl px-2.5 py-2 text-left truncate">👋 Dar Boas-Vindas</button>
+            <button onclick="speakPreset('Alerta vermelho! Largue o frigorífico imediatamente!')" class="btn-ctrl bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl px-2.5 py-2 text-left truncate">🚨 Alerta Frigorífico</button>
+            <button onclick="speakPreset('Alguém quer um cafezinho quentinho?')" class="btn-ctrl bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl px-2.5 py-2 text-left truncate">☕ Queres Café?</button>
+            <button onclick="speakPreset('Atenção equipa, está na hora de arrumar a sala!')" class="btn-ctrl bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl px-2.5 py-2 text-left truncate">🧹 Arrumar a Sala</button>
+            <button onclick="speakPreset('Gosto muito de viver convosco nesta casa!')" class="btn-ctrl bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl px-2.5 py-2 text-left truncate">❤️ Elogiar Família</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- ABA 2: SENTINELA RESIDENCIAL, TEMPORIZADORES FALADOS & GALERIA DE FOTOS -->
+      <!-- ================================================================= -->
+      <div id="tabPanel_domestic" class="hidden flex-col gap-4 flex-1">
+
+        <!-- 1. Modo Sentinela / Alarme Residencial Inteligente -->
+        <div class="glass-card rounded-2xl p-4 border border-rose-900/50">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <h3 class="text-xs font-bold text-rose-400 uppercase tracking-wider">🛡️ Modo Sentinela & Alarme Residencial</h3>
+              <p class="text-[11px] text-slate-400">Vigia movimento na câmara + barreira Laser ToF e tira fotos automáticas</p>
+            </div>
+            <button onclick="toggleSentryUI()" id="sentryMainBtn" class="btn-ctrl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl shadow">
+              Ativar Sentinela
+            </button>
+          </div>
+
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3 space-y-2">
+            <div class="flex justify-between text-xs mono-val">
+              <span class="text-slate-400">Movimento Ótico na Câmara:</span>
+              <span id="sentryMotionVal" class="text-cyan-300 font-bold">0.0%</span>
+            </div>
+            <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
+              <div id="sentryMotionBar" class="bg-gradient-to-r from-emerald-400 via-amber-400 to-rose-500 h-full transition-all duration-200" style="width: 2%"></div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] pt-1">
+              <span id="sentryLastEvent" class="text-slate-300 mono-val truncate">⚪ Desativado</span>
+              <span id="sentryTriggersBadge" class="bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-amber-300 mono-val">0 alertas</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Temporizadores & Lembretes Falados na Coluna do Scout -->
+        <div class="glass-card rounded-2xl p-4">
+          <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">⏰ Temporizadores & Avisos Falados no Scout</h3>
+          <div class="flex gap-1.5 mb-2">
+            <input id="timerLabelInput" type="text" placeholder="Ex: Tirar a pizza do forno" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs" />
+            <button onclick="createTimer(60)" class="btn-ctrl bg-slate-800 hover:bg-amber-600 hover:text-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs font-bold">1m</button>
+            <button onclick="createTimer(300)" class="btn-ctrl bg-slate-800 hover:bg-amber-600 hover:text-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs font-bold">5m</button>
+            <button onclick="createTimer(600)" class="btn-ctrl bg-slate-800 hover:bg-amber-600 hover:text-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs font-bold">10m</button>
+            <button onclick="createTimer(900)" class="btn-ctrl bg-slate-800 hover:bg-amber-600 hover:text-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs font-bold">15m</button>
+          </div>
+          <div id="activeTimersList" class="space-y-1.5 text-xs">
+            <div class="text-[11px] text-slate-500 italic text-center py-1">Nenhum temporizador ativo. Quando terminar, o Scout fala em voz alta!</div>
+          </div>
+        </div>
+
+        <!-- 3. Galeria Photo Booth & Registos de Segurança -->
+        <div class="glass-card rounded-2xl p-4 flex-1 flex flex-col">
+          <div class="flex items-center justify-between mb-2.5">
+            <div>
+              <h3 class="text-xs font-bold text-cyan-400 uppercase tracking-wider">📸 Galeria Photo Booth do Scout</h3>
+              <p class="text-[10px] text-slate-400">Fotos capturadas manualmente, por voz ("Scout, tira uma foto") ou pelo Modo Sentinela</p>
+            </div>
+            <button onclick="takeSnapshotUI()" class="btn-ctrl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow">
+              📸 Capturar Agora
+            </button>
+          </div>
+          <div id="snapshotsGallery" class="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto max-h-[290px] pr-1">
+            <div class="col-span-full text-[11px] text-slate-500 italic text-center py-6">Ainda sem fotografias. Clique em "📸 Foto" para estrear a galeria!</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- ABA 3: MEMÓRIA BIOMÉTRICA (CARAS & VOZES) -->
+      <!-- ================================================================= -->
+      <div id="tabPanel_people" class="hidden flex-col gap-4 flex-1">
+        <div class="glass-card rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-xs font-bold text-indigo-300 uppercase tracking-wider">👤 Memória Biométrica (Caras & Vozes)</h3>
+              <p class="text-[11px] text-slate-400">Reconhecimento facial 192-D + Impressão Vocal Mel/Pitch F0</p>
+            </div>
+            <span id="s_id_active_badge" class="text-[10px] bg-indigo-950 border border-indigo-700 px-2.5 py-0.5 rounded-full text-indigo-200 mono-val">A identificar...</span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 text-center text-xs mono-val mb-3">
+            <div class="bg-slate-950 p-2 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-400">📸 Rosto na Câmara</div>
+              <div id="s_id_face" class="text-indigo-300 font-bold truncate mt-0.5">--</div>
+            </div>
+            <div class="bg-slate-950 p-2 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-400">🗣️ Última Voz</div>
+              <div id="s_id_voice" class="text-emerald-300 font-bold truncate mt-0.5">--</div>
+            </div>
+            <div class="bg-slate-950 p-2 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-400">🎵 Tom Vocal (F0)</div>
+              <div id="s_id_pitch" class="text-cyan-300 font-bold mt-0.5">-- Hz</div>
+            </div>
+          </div>
+
+          <!-- Registo Rápido -->
+          <div class="flex gap-1.5 mb-3">
+            <input id="enrollNameInput" type="text" placeholder="Nome da pessoa (ex: Tiago)..." class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-400" />
+            <button onclick="enrollPersonUI()" class="btn-ctrl bg-indigo-600 hover:bg-indigo-500 px-3.5 py-2 rounded-xl text-xs font-bold text-white whitespace-nowrap shadow">
+              📸🎤 Memorizar Agora
+            </button>
+          </div>
+
+          <div id="peopleListContainer" class="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+            <div class="text-[11px] text-slate-500 italic text-center py-4">Nenhuma pessoa memorizada ainda.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- ABA 4: TELEMETRIA COMPLETA DOS SENSORES ROS 1 -->
+      <!-- ================================================================= -->
+      <div id="tabPanel_sensors" class="hidden flex-col gap-3 flex-1">
+        <div class="glass-card rounded-2xl p-4 flex flex-col gap-3">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div>
+              <h2 class="text-xs font-bold text-cyan-400 uppercase tracking-wider">📡 Telemetria Hardware ROS 1 (TCPROS)</h2>
+            </div>
+            <span id="sensorUpdateBadge" class="text-[10px] bg-emerald-950 border border-emerald-700 px-2.5 py-0.5 rounded-full mono-val text-emerald-300">ONLINE</span>
+          </div>
+
+          <!-- Laser ToF -->
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-emerald-400">📏 Laser Time-of-Flight (ToF)</span>
+              <span class="text-[10px] text-slate-500 mono-val">/SensorNode/tof</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-2">
+              <div id="tofBar" class="bg-gradient-to-r from-red-500 via-amber-400 to-emerald-400 h-full transition-all duration-200" style="width: 15%"></div>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5 text-center text-xs mono-val">
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">Distância</div><div id="s_tof_dist" class="font-bold text-emerald-300">0.22m</div></div>
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">Mín/Máx</div><div id="s_tof_minmax" class="text-slate-200">0.03/2m</div></div>
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">FOV</div><div id="s_tof_fov" class="text-slate-200">0.44 rad</div></div>
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">Tipo</div><div id="s_tof_rad" class="text-slate-200">IR (1)</div></div>
+            </div>
+          </div>
+
+          <!-- IMU 6-Eixos -->
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold text-cyan-400">🧭 IMU 6-Eixos (Acelerómetro + Giroscópio)</span>
+              <span class="text-[10px] text-slate-500 mono-val">/SensorNode/imu</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs mono-val mb-1.5">
+              <div class="bg-slate-900 p-2 rounded-lg">
+                <div class="text-[9px] text-slate-400 mb-0.5">Aceleração (m/s²)</div>
+                <div class="flex justify-between"><span>X:</span><span id="s_acc_x" class="text-cyan-300">0.00</span></div>
+                <div class="flex justify-between"><span>Y:</span><span id="s_acc_y" class="text-cyan-300">0.00</span></div>
+                <div class="flex justify-between"><span>Z:</span><span id="s_acc_z" class="text-cyan-300">9.81</span></div>
+              </div>
+              <div class="bg-slate-900 p-2 rounded-lg">
+                <div class="text-[9px] text-slate-400 mb-0.5">Giroscópio (rad/s)</div>
+                <div class="flex justify-between"><span>Gx:</span><span id="s_gyr_x" class="text-amber-300">0.000</span></div>
+                <div class="flex justify-between"><span>Gy:</span><span id="s_gyr_y" class="text-amber-300">0.000</span></div>
+                <div class="flex justify-between"><span>Gz:</span><span id="s_gyr_z" class="text-amber-300">0.000</span></div>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs mono-val">
+              <div class="bg-slate-900 px-3 py-1 rounded-lg flex justify-between"><span class="text-slate-400">Pitch:</span><span id="s_imu_pitch" class="font-bold">-0.2°</span></div>
+              <div class="bg-slate-900 px-3 py-1 rounded-lg flex justify-between"><span class="text-slate-400">Roll:</span><span id="s_imu_roll" class="font-bold">-0.6°</span></div>
+            </div>
+          </div>
+
+          <!-- Odometria, Luz e Câmara -->
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <div class="text-xs font-bold text-purple-400 mb-1.5">⚙️ Odometria, Luz & Áudio</div>
+            <div class="grid grid-cols-3 gap-1.5 text-center text-xs mono-val mb-1.5">
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">Odom X</div><div id="s_odom_x" class="text-purple-300 font-bold">0.00m</div></div>
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">Odom Y</div><div id="s_odom_y" class="text-purple-300 font-bold">0.00m</div></div>
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">Yaw</div><div id="s_odom_yaw" class="text-purple-300 font-bold">0.0°</div></div>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5 text-center text-xs mono-val">
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">Luz</div><div id="s_light_lux" class="text-amber-300 font-bold">0.0</div></div>
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">LED IR</div><div id="s_ir_state" class="text-slate-200">OFF</div></div>
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">Coluna</div><div id="s_spk_state" class="text-emerald-300 font-bold">Pronta</div></div>
+              <div class="bg-slate-900 p-1.5 rounded-lg"><div class="text-[9px] text-slate-400">FPS</div><div id="s_cam_fps" class="text-cyan-300 font-bold">--</div></div>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between text-[11px]">
+              <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+                <input type="checkbox" id="s_mic_vad_toggle" checked onchange="updateAudioSettings()" class="rounded bg-slate-800" />
+                Escuta VAD Ativa
+              </label>
+              <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+                <input type="checkbox" id="s_mic_wake_toggle" checked onchange="updateAudioSettings()" class="rounded bg-slate-800" />
+                Exigir palavra "Scout"
+              </label>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </aside>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL PARA VISUALIZAR FOTOGRAFIA EM TAMANHO REAL -->
+  <!-- ===================================================================== -->
+  <div id="photoModal" onclick="closePhotoModal()" class="fixed inset-0 z-50 hidden bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div onclick="event.stopPropagation()" class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full overflow-hidden shadow-2xl">
+      <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-800">
+        <span id="photoModalTitle" class="text-sm font-bold text-cyan-300">📸 Fotografia do Scout</span>
+        <button onclick="closePhotoModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+      <img id="photoModalImg" src="" alt="Snapshot" class="w-full max-h-[75vh] object-contain bg-black" />
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- SCRIPTS DE CONTROLO, TELEMETRIA, JOYSTICK E FUNCIONALIDADES DOMÉSTICAS -->
+  <!-- ===================================================================== -->
+  <script>
+    let ws = null;
+    let driveGear = 0.75;
+    let mapZoomScale = 52.0;
+    const seenLogIds = new Set();
+
+    function connectWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws/control`);
+      ws.onmessage = (ev) => {
+        const data = JSON.parse(ev.data);
+        if (data.robot) updateHUD(data.robot);
+      };
+      ws.onclose = () => setTimeout(connectWS, 2000);
+    }
+    connectWS();
+
+    // =========================================================================
+    // NAVEGAÇÃO ENTRE ABAS (PAINEL DIREITO)
+    // =========================================================================
+    function switchRightTab(tabName) {
+      const tabs = ['chat', 'domestic', 'people', 'sensors'];
+      for (const t of tabs) {
+        const panel = document.getElementById(`tabPanel_${t}`);
+        const btn = document.getElementById(`tabBtn_${t}`);
+        if (t === tabName) {
+          panel.classList.remove('hidden');
+          panel.classList.add('flex');
+          btn.className = 'py-2 px-2 rounded-xl bg-cyan-600 text-white shadow transition flex items-center justify-center gap-1';
+        } else {
+          panel.classList.add('hidden');
+          panel.classList.remove('flex');
+          btn.className = 'py-2 px-2 rounded-xl text-slate-300 hover:bg-slate-800/70 transition flex items-center justify-center gap-1';
+        }
+      }
+    }
+
+    // =========================================================================
+    // MUDANÇAS DE VELOCIDADE & JOYSTICK ANALÓGICO VIRTUAL 360°
+    // =========================================================================
+    function setDriveGear(mult, idx) {
+      driveGear = mult;
+      for (const i of [1, 2, 3]) {
+        const b = document.getElementById(`gearBtn${i}`);
+        if (i === idx) {
+          b.className = 'px-2 py-0.5 rounded-lg bg-cyan-600 text-white font-bold transition';
+        } else {
+          b.className = 'px-2 py-0.5 rounded-lg text-slate-400 hover:text-white transition';
+        }
+      }
+    }
+
+    function driveHold(vx, vy, wz) {
+      sendMove(+(vx * driveGear).toFixed(2), +(vy * driveGear).toFixed(2), +(wz * driveGear).toFixed(2));
+    }
+
+    // Configuração do Joystick Virtual 360° Mecanum
+    (function initVirtualJoystick() {
+      const zone = document.getElementById('joystickZone');
+      const knob = document.getElementById('joystickKnob');
+      const readout = document.getElementById('joystickReadout');
+      if (!zone || !knob) return;
+
+      let active = false;
+      let joyTimer = null;
+      let lastVx = 0, lastVy = 0;
+      const maxRadius = 46;
+
+      function handlePointer(e) {
+        if (!active) return;
+        const rect = zone.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        let dx = e.clientX - cx;
+        let dy = e.clientY - cy;
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxRadius) {
+          dx = (dx / dist) * maxRadius;
+          dy = (dy / dist) * maxRadius;
+        }
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+
+        const normX = dx / maxRadius; // Direita (+) / Esquerda (-)
+        const normY = -dy / maxRadius; // Frente (+) / Trás (-)
+        lastVx = +(normY * 0.45 * driveGear).toFixed(2);
+        lastVy = +(-normX * 0.45 * driveGear).toFixed(2);
+        readout.textContent = `Vx: ${lastVx} · Vy: ${lastVy}`;
+      }
+
+      zone.addEventListener('pointerdown', (e) => {
+        active = true;
+        zone.setPointerCapture(e.pointerId);
+        handlePointer(e);
+        if (joyTimer) clearInterval(joyTimer);
+        joyTimer = setInterval(() => {
+          if (active && (Math.abs(lastVx) > 0.03 || Math.abs(lastVy) > 0.03)) {
+            sendMove(lastVx, lastVy, 0);
+          }
+        }, 120);
+      });
+
+      zone.addEventListener('pointermove', handlePointer);
+
+      const stopJoy = () => {
+        if (!active) return;
+        active = false;
+        if (joyTimer) { clearInterval(joyTimer); joyTimer = null; }
+        knob.style.transform = 'translate(0px, 0px)';
+        readout.textContent = 'Arraste para deslizar 360°';
+        sendStop();
+      };
+      zone.addEventListener('pointerup', stopJoy);
+      zone.addEventListener('pointercancel', stopJoy);
+    })();
+
+    // =========================================================================
+    // POLLING DE TELEMETRIA E ESTADO DOMÉSTICO EM TEMPO REAL
+    // =========================================================================
+    async function pollTelemetry() {
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 1500);
+        const res = await fetch('/api/status', { signal: ctrl.signal });
+        clearTimeout(tid);
+        const data = await res.json();
+        if (data.robot) updateHUD(data.robot);
+        if (data.identity) updateIdentityHUD(data.identity);
+        if (data.map) updateMapHUD(data.map);
+        if (data.xbox) updateXboxHUD(data.xbox);
+        if (data.domestic) updateDomesticHUD(data.domestic);
+        if (data.logs && Array.isArray(data.logs)) {
+          for (const entry of data.logs) {
+            if (!seenLogIds.has(entry.id)) {
+              seenLogIds.add(entry.id);
+              appendLogEntry(entry);
+            }
+          }
+        }
+      } catch (e) {}
+      setTimeout(pollTelemetry, 260);
+    }
+    pollTelemetry();
+
+    // =========================================================================
+    // FUNCIONALIDADES DOMÉSTICAS (PERSONALIDADE, COREOGRAFIAS, FOTOS, SENTINELA, TIMERS)
+    // =========================================================================
+    async function changePersonality(personality_id) {
+      const res = await fetch('/api/domestic/personality', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ personality_id, speak_greeting: true })
+      });
+      const data = await res.json();
+      if (data.domestic) updateDomesticHUD(data.domestic);
+    }
+
+    async function triggerStunt(stunt) {
+      const res = await fetch('/api/domestic/stunt', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ stunt })
+      });
+      const data = await res.json();
+      if (data.domestic) updateDomesticHUD(data.domestic);
+    }
+
+    async function takeSnapshotUI() {
+      const flash = document.getElementById('cameraFlash');
+      flash.classList.remove('flash-anim');
+      void flash.offsetWidth;
+      flash.classList.add('flash-anim');
+
+      const res = await fetch('/api/domestic/snapshot', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ label: 'Foto Instantânea', speak_shutter: true })
+      });
+      const data = await res.json();
+      if (data.domestic) updateDomesticHUD(data.domestic);
+    }
+
+    async function deleteSnapshotUI(snapId) {
+      const res = await fetch(`/api/domestic/snapshot/${snapId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.domestic) updateDomesticHUD(data.domestic);
+    }
+
+    function openPhotoModal(filename, label, timestamp) {
+      document.getElementById('photoModalImg').src = `/snapshots/${filename}`;
+      document.getElementById('photoModalTitle').textContent = `📸 ${label} (${timestamp})`;
+      document.getElementById('photoModal').classList.remove('hidden');
+    }
+
+    function closePhotoModal() {
+      document.getElementById('photoModal').classList.add('hidden');
+    }
+
+    async function toggleSentryUI() {
+      const res = await fetch('/api/domestic/sentry', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (data.domestic) updateDomesticHUD(data.domestic);
+    }
+
+    async function createTimer(seconds) {
+      const inp = document.getElementById('timerLabelInput');
+      const label = (inp.value || '').trim() || 'Alarme do Scout';
+      const res = await fetch('/api/domestic/timer', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ seconds, label })
+      });
+      inp.value = '';
+      const data = await res.json();
+      if (data.domestic) updateDomesticHUD(data.domestic);
+    }
+
+    async function cancelTimerUI(timerId) {
+      const res = await fetch(`/api/domestic/timer/${timerId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.domestic) updateDomesticHUD(data.domestic);
+    }
+
+    async function speakPreset(text) {
+      await fetch('/api/speak', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ text })
+      });
+    }
+
+    async function sendQuickSpeak() {
+      const inp = document.getElementById('quickSpeakInput');
+      const text = (inp.value || '').trim();
+      if (!text) return;
+      inp.value = '';
+      await speakPreset(text);
+    }
+
+    async function askWhatDoYouSee() {
+      switchRightTab('chat');
+      const input = document.getElementById('chatInput');
+      input.value = 'Olha pela tua câmara agora e descreve ao pormenor o que estás a ver à tua frente na sala!';
+      await sendChat();
+    }
+
+    function toggleCameraFullscreen() {
+      const el = document.getElementById('cameraContainer');
+      if (!document.fullscreenElement) {
+        el.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    let lastSnapshotsSig = '';
+    function updateDomesticHUD(dom) {
+      if (!dom) return;
+
+      // Personalidade ativa
+      if (dom.personality && dom.personality.active_id) {
+        const sel = document.getElementById('personalitySelect');
+        if (sel && sel.value !== dom.personality.active_id) {
+          sel.value = dom.personality.active_id;
+        }
+      }
+
+      // Estado de Coreografia
+      const stuntBadge = document.getElementById('stuntStatusBadge');
+      if (dom.active_stunt) {
+        stuntBadge.textContent = `💃 A executar: ${dom.active_stunt}`;
+        stuntBadge.className = 'text-[10px] bg-emerald-950 border border-emerald-500 text-emerald-300 px-2 py-0.5 rounded-full mono-val animate-pulse';
+      } else {
+        stuntBadge.textContent = 'Pronto';
+        stuntBadge.className = 'text-[10px] bg-amber-950/80 border border-amber-700/50 text-amber-300 px-2 py-0.5 rounded-full mono-val';
+      }
+
+      // Modo Sentinela
+      if (dom.sentry) {
+        const s = dom.sentry;
+        const hudBadge = document.getElementById('hudSentryBadge');
+        const camBtn = document.getElementById('camSentryBtn');
+        const camLbl = document.getElementById('camSentryBtnLabel');
+        const mainBtn = document.getElementById('sentryMainBtn');
+
+        if (s.enabled) {
+          hudBadge.classList.remove('hidden');
+          camLbl.textContent = 'Sentinela: ON';
+          camBtn.className = 'btn-ctrl bg-rose-950/90 border border-rose-500 text-xs px-3 py-1.5 rounded-full backdrop-blur-md font-bold text-rose-200 flex items-center gap-1 shadow';
+          mainBtn.textContent = '⏹️ Desativar Sentinela';
+          mainBtn.className = 'btn-ctrl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl shadow animate-pulse';
+        } else {
+          hudBadge.classList.add('hidden');
+          camLbl.textContent = 'Sentinela: OFF';
+          camBtn.className = 'btn-ctrl bg-slate-900/85 hover:bg-rose-950 border border-slate-700 text-xs px-3 py-1.5 rounded-full backdrop-blur-md font-semibold text-slate-200 flex items-center gap-1 shadow';
+          mainBtn.textContent = '🛡️ Ativar Sentinela';
+          mainBtn.className = 'btn-ctrl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl shadow';
+        }
+
+        document.getElementById('sentryMotionVal').textContent = `${s.motion_score_pct}%`;
+        document.getElementById('sentryMotionBar').style.width = `${Math.max(2, s.motion_score_pct)}%`;
+        document.getElementById('sentryLastEvent').textContent = s.last_event;
+        document.getElementById('sentryTriggersBadge').textContent = `${s.triggers_count} alertas`;
+      }
+
+      // Temporizadores Falados
+      const tContainer = document.getElementById('activeTimersList');
+      const timers = dom.timers || [];
+      if (timers.length === 0) {
+        tContainer.innerHTML = `<div class="text-[11px] text-slate-500 italic text-center py-1">Nenhum temporizador ativo. Quando terminar, o Scout fala em voz alta!</div>`;
+      } else {
+        tContainer.innerHTML = timers.map(t => {
+          const mins = Math.floor(t.remaining_s / 60);
+          const secs = t.remaining_s % 60;
+          const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+          return `
+            <div class="flex items-center justify-between bg-slate-950 border border-amber-800/60 rounded-xl px-3 py-1.5">
+              <span class="font-semibold text-amber-200">⏰ ${t.label}</span>
+              <div class="flex items-center gap-2">
+                <span class="mono-val font-bold text-emerald-300">${timeStr}</span>
+                <button onclick="cancelTimerUI('${t.id}')" class="text-rose-400 hover:text-rose-200 text-xs">✕</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Galeria Photo Booth
+      const snaps = dom.snapshots || [];
+      const sig = snaps.map(s => s.id).join(',');
+      if (sig !== lastSnapshotsSig) {
+        lastSnapshotsSig = sig;
+        const gal = document.getElementById('snapshotsGallery');
+        if (snaps.length === 0) {
+          gal.innerHTML = `<div class="col-span-full text-[11px] text-slate-500 italic text-center py-6">Ainda sem fotografias. Clique em "📸 Foto" para estrear a galeria!</div>`;
+        } else {
+          gal.innerHTML = snaps.map(s => {
+            const imgSrc = s.thumb_b64 ? `data:image/jpeg;base64,${s.thumb_b64}` : `/snapshots/${s.filename}`;
+            const personTag = s.person ? `<span class="bg-indigo-950/90 text-indigo-200 px-1.5 py-0.5 rounded text-[9px]">👤 ${s.person}</span>` : '';
+            return `
+              <div class="group relative bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow">
+                <img src="${imgSrc}" onclick="openPhotoModal('${s.filename}', '${s.label}', '${s.timestamp}')" class="w-full h-24 object-cover cursor-pointer group-hover:scale-105 transition" />
+                <button onclick="deleteSnapshotUI('${s.id}')" class="absolute top-1 right-1 bg-slate-950/80 hover:bg-rose-600 text-slate-300 hover:text-white rounded-full w-5 h-5 text-[10px] flex items-center justify-center">✕</button>
+                <div class="p-1.5 text-[10px]">
+                  <div class="font-semibold text-slate-200 truncate flex items-center justify-between gap-1">
+                    <span class="truncate">${s.label}</span>
+                    ${personTag}
+                  </div>
+                  <div class="text-[9px] text-slate-500 mono-val">${s.timestamp}</div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+    }
+
+    // =========================================================================
+    // MEMÓRIA BIOMÉTRICA (CARAS & VOZES)
+    // =========================================================================
+    let lastPeopleSig = '';
+    function updateIdentityHUD(idData) {
+      if (!idData) return;
+      const live = idData.live || {};
+      const badge = document.getElementById('s_id_active_badge');
+      const headerBadge = document.getElementById('headerPersonBadge');
+      if (live.active_person) {
+        const txt = `👤 ${live.active_person} (${live.active_confidence_pct}%)`;
+        badge.textContent = txt;
+        badge.className = 'text-[10px] bg-emerald-950 border border-emerald-600 px-2.5 py-0.5 rounded-full text-emerald-300 font-bold mono-val';
+        headerBadge.textContent = txt;
+        headerBadge.className = 'text-[10px] bg-emerald-950/90 border border-emerald-600 text-emerald-300 px-2.5 py-0.5 rounded-full font-bold mono-val';
+      } else {
+        badge.textContent = 'A aguardar identificação...';
+        badge.className = 'text-[10px] bg-indigo-950 border border-indigo-700 px-2.5 py-0.5 rounded-full text-indigo-200 mono-val';
+        headerBadge.textContent = '👤 A identificar...';
+        headerBadge.className = 'text-[10px] bg-indigo-950/90 border border-indigo-700/60 text-indigo-200 px-2.5 py-0.5 rounded-full mono-val';
+      }
+
+      document.getElementById('s_id_face').textContent = live.face_match ? `${live.face_match} (${live.face_confidence_pct}%)` : 'Sem match';
+      document.getElementById('s_id_voice').textContent = live.voice_match ? `${live.voice_match} (${live.voice_confidence_pct}%)` : 'Sem match';
+      document.getElementById('s_id_pitch').textContent = live.last_pitch_hz ? `${live.last_pitch_hz} Hz` : '-- Hz';
+
+      const people = idData.people || [];
+      const sig = JSON.stringify(people.map(p => `${p.id}:${p.face_samples}:${p.voice_samples}:${p.interactions}`));
+      if (sig === lastPeopleSig) return;
+      lastPeopleSig = sig;
+
+      const container = document.getElementById('peopleListContainer');
+      if (people.length === 0) {
+        container.innerHTML = `<div class="text-[11px] text-slate-500 italic text-center py-4">Nenhuma pessoa memorizada ainda. Olhe para o Scout, fale com ele e clique em Memorizar!</div>`;
+        return;
+      }
+
+      container.innerHTML = people.map(p => {
+        const avatarImg = p.avatar_b64
+          ? `<img src="data:image/jpeg;base64,${p.avatar_b64}" class="w-10 h-10 rounded-full object-cover border-2 border-indigo-500" />`
+          : `<div class="w-10 h-10 rounded-full bg-indigo-900 flex items-center justify-center text-sm font-bold">${p.name[0]}</div>`;
+        return `
+          <div class="flex items-center justify-between bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 text-xs">
+            <div class="flex items-center gap-3">
+              ${avatarImg}
+              <div>
+                <div class="font-bold text-slate-100 text-sm">${p.name}</div>
+                <div class="text-[10px] text-slate-400 mono-val">📸 ${p.face_samples} caras · 🗣️ ${p.voice_samples} vozes ${p.avg_pitch_hz ? `(${p.avg_pitch_hz}Hz)` : ''}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button onclick="enrollPersonUI('${p.name}')" class="btn-ctrl text-[10px] bg-indigo-900/80 hover:bg-indigo-700 border border-indigo-600 px-2.5 py-1 rounded-lg text-indigo-200 font-semibold">+ Amostra</button>
+              <button onclick="deletePersonUI('${p.id}')" class="btn-ctrl text-[10px] bg-rose-950 hover:bg-rose-800 border border-rose-800 px-2 py-1 rounded-lg text-rose-300">🗑️</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function enrollPersonUI(existingName) {
+      const inp = document.getElementById('enrollNameInput');
+      const name = (existingName || inp.value || '').trim();
+      if (!name) { inp.focus(); return; }
+      const res = await fetch('/api/identity/enroll', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name, include_face: true, include_last_voice: true })
+      });
+      const data = await res.json();
+      if (!existingName) inp.value = '';
+      if (data.identity) updateIdentityHUD(data.identity);
+    }
+
+    async function deletePersonUI(personId) {
+      const res = await fetch(`/api/identity/${personId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.identity) updateIdentityHUD(data.identity);
+    }
+
+    // =========================================================================
+    // PATRULHA AUTÓNOMA & MAPA 2D RADAR SLAM
+    // =========================================================================
+    let isPatrolling = false;
+    let lastMapData = null;
+
+    function adjustMapZoom(factor) {
+      mapZoomScale = Math.min(140.0, Math.max(20.0, mapZoomScale * factor));
+      if (lastMapData) render2DMap(lastMapData);
+    }
+
+    async function togglePatrol() {
+      const url = isPatrolling ? '/api/patrol/stop' : '/api/patrol/start';
+      const res = await fetch(url, { method: 'POST' });
+      const data = await res.json();
+      if (data.map) updateMapHUD(data.map);
+    }
+
+    async function resetHouseMap() {
+      const res = await fetch('/api/patrol/reset-map', { method: 'POST' });
+      const data = await res.json();
+      if (data.map) updateMapHUD(data.map);
+    }
+
+    function updateMapHUD(m) {
+      lastMapData = m;
+      isPatrolling = !!m.patrolling;
+      const btn = document.getElementById('patrolToggleBtn');
+      const hudPatrol = document.getElementById('hudPatrolBadge');
+      if (isPatrolling) {
+        btn.textContent = '⏹️ Parar Patrulha';
+        btn.className = 'btn-ctrl bg-rose-600 hover:bg-rose-500 animate-pulse text-white text-xs font-bold px-3.5 py-1.5 rounded-xl shadow';
+        hudPatrol.classList.remove('hidden');
+      } else {
+        btn.textContent = '🚓 Iniciar Patrulha';
+        btn.className = 'btn-ctrl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl shadow-lg shadow-emerald-600/20';
+        hudPatrol.classList.add('hidden');
+      }
+      document.getElementById('patrolStateText').textContent = `Estado: ${m.patrol_state || 'Parado'}`;
+      document.getElementById('mapStatsArea').textContent = `Área: ${m.explored_area_m2} m² · Dist: ${m.total_distance_m} m · Obst: ${m.obstacle_count}`;
+      if (m.pose) {
+        document.getElementById('mapStatsPose').textContent = `X: ${m.pose.x}m Y: ${m.pose.y}m (${m.pose.yaw_deg}°)`;
+      }
+      render2DMap(m);
+    }
+
+    function render2DMap(m) {
+      const canvas = document.getElementById('houseMapCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width;
+      const H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      ctx.fillStyle = '#050811';
+      ctx.fillRect(0, 0, W, H);
+
+      const scale = mapZoomScale;
+      const pose = m.pose || { x: 0, y: 0, yaw_deg: 0 };
+      const cx = W / 2 - pose.x * scale;
+      const cy = H / 2 + pose.y * scale;
+
+      // Grelha métrica (a cada 0.5m)
+      ctx.strokeStyle = 'rgba(30, 41, 59, 0.55)';
+      ctx.lineWidth = 1;
+      const stepPx = scale * 0.5;
+      for (let x = cx % stepPx; x < W; x += stepPx) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = cy % stepPx; y < H; y += stepPx) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+
+      // 1. Células Livres Exploradas
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.16)';
+      const cellPx = Math.max(4, scale * 0.10);
+      for (const [fx, fy] of (m.free_cells || [])) {
+        ctx.fillRect(cx + fx * scale - cellPx / 2, cy - fy * scale - cellPx / 2, cellPx, cellPx);
+      }
+
+      // 2. Paredes e Obstáculos (Laser ToF)
+      for (const [ox, oy, hits] of (m.obstacles || [])) {
+        const px = cx + ox * scale;
+        const py = cy - oy * scale;
+        const alpha = Math.min(1.0, 0.5 + (hits || 1) * 0.12);
+        ctx.fillStyle = `rgba(244, 63, 94, ${alpha})`;
+        ctx.fillRect(px - 3, py - 3, 6, 6);
+      }
+
+      // 3. Trajetória percorrida
+      const path = m.path || [];
+      if (path.length > 1) {
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        path.forEach(([px, py], idx) => {
+          const sx = cx + px * scale;
+          const sy = cy - py * scale;
+          if (idx === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        });
+        ctx.stroke();
+      }
+
+      // 4. Cone do Feixe Laser ToF
+      const rx = cx + pose.x * scale;
+      const ry = cy - pose.y * scale;
+      const yawRad = (pose.yaw_deg || 0) * Math.PI / 180.0;
+      const beamLen = (m.tof_beam_m || 0.3) * scale;
+      const fov = 0.44;
+      ctx.fillStyle = 'rgba(34, 211, 238, 0.24)';
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx + beamLen * Math.cos(yawRad - fov / 2), ry - beamLen * Math.sin(yawRad - fov / 2));
+      ctx.lineTo(rx + beamLen * Math.cos(yawRad + fov / 2), ry - beamLen * Math.sin(yawRad + fov / 2));
+      ctx.closePath();
+      ctx.fill();
+
+      // 5. Landmarks (Base e Pessoas)
+      ctx.font = '10px "JetBrains Mono", monospace';
+      for (const lm of (m.landmarks || [])) {
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText(lm.label, cx + lm.x * scale + 6, cy - lm.y * scale - 4);
+      }
+
+      // 6. Posição do Scout
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.arc(rx, ry, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx + 13 * Math.cos(yawRad), ry - 13 * Math.sin(yawRad));
+      ctx.stroke();
+    }
+
+    // =========================================================================
+    // COMANDO XBOX (XINPUT NATIVO PC + HTML5 GAMEPAD API)
+    // =========================================================================
+    function updateXboxHUD(x) {
+      const badge = document.getElementById('xboxStatusBadge');
+      if (x.connected) {
+        badge.textContent = `🎮 Xbox: LIGADO (${x.source})`;
+        badge.className = 'text-[10px] bg-lime-950 border border-lime-600 px-2.5 py-0.5 rounded-full text-lime-300 font-bold mono-val';
+      } else {
+        badge.textContent = '🎮 Xbox: Desligado';
+        badge.className = 'text-[10px] bg-slate-900 border border-slate-700 px-2.5 py-0.5 rounded-full text-slate-400 mono-val';
+      }
+      document.getElementById('xboxLeftStick').textContent = `${x.lx.toFixed(1)} , ${x.ly.toFixed(1)}`;
+      document.getElementById('xboxRightStick').textContent = `${x.rx.toFixed(1)} | ${(x.rt - x.lt).toFixed(1)}`;
+      document.getElementById('xboxGear').textContent = `${x.speed_gear_pct}%`;
+      const btns = (x.active_buttons && x.active_buttons.length > 0) ? ` [${x.active_buttons.join(', ')}]` : '';
+      document.getElementById('xboxLastCmd').textContent = `${x.last_command}${btns}`;
+    }
+
+    // =========================================================================
+    // ATUALIZAÇÃO DOS SENSORES & HUD GERAL
+    // =========================================================================
+    function updateHUD(r) {
+      const dot = document.getElementById('statusDot');
+      const badge = document.getElementById('sensorUpdateBadge');
+      if (r.connected) {
+        dot.className = 'absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 ring-4 ring-slate-950 animate-pulse';
+        badge.textContent = 'ONLINE (LIVE)';
+      } else {
+        dot.className = 'absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-400 ring-4 ring-slate-950';
+        badge.textContent = r.mock_mode ? 'SIMULAÇÃO' : 'A LIGAR...';
+      }
+
+      if (r.camera) {
+        document.getElementById('hudRes').textContent = `${r.camera.width}x${r.camera.height} · ${r.camera.fps} FPS`;
+        document.getElementById('s_cam_fps').textContent = `${r.camera.fps}`;
+      }
+      document.getElementById('hudTof').textContent = `📏 ToF: ${r.tof_distance_m}m`;
+      document.getElementById('hudAction').textContent = r.last_action;
+      document.getElementById('irBtn').textContent = `🌙 IR: ${r.ir_led_on ? 'ON' : 'OFF'}`;
+
+      // ToF
+      document.getElementById('s_tof_dist').textContent = `${r.tof_distance_m}m`;
+      document.getElementById('s_tof_minmax').textContent = `${r.tof_min_range_m}/${r.tof_max_range_m}m`;
+      document.getElementById('s_tof_fov').textContent = `${r.tof_fov_rad} rad`;
+      const pctTof = Math.min(100, Math.max(5, (r.tof_distance_m / (r.tof_max_range_m || 2.0)) * 100));
+      document.getElementById('tofBar').style.width = `${pctTof}%`;
+
+      // IMU
+      if (r.imu) {
+        document.getElementById('s_acc_x').textContent = r.imu.accel_x.toFixed(2);
+        document.getElementById('s_acc_y').textContent = r.imu.accel_y.toFixed(2);
+        document.getElementById('s_acc_z').textContent = r.imu.accel_z.toFixed(2);
+        document.getElementById('s_gyr_x').textContent = r.imu.gyro_x.toFixed(3);
+        document.getElementById('s_gyr_y').textContent = r.imu.gyro_y.toFixed(3);
+        document.getElementById('s_gyr_z').textContent = r.imu.gyro_z.toFixed(3);
+        document.getElementById('s_imu_pitch').textContent = `${r.imu.pitch_deg.toFixed(1)}°`;
+        document.getElementById('s_imu_roll').textContent = `${r.imu.roll_deg.toFixed(1)}°`;
+        document.getElementById('hudImu').textContent = `🧭 Pitch: ${r.imu.pitch_deg.toFixed(1)}°`;
+      }
+
+      // Luz & IR
+      document.getElementById('s_light_lux').textContent = r.light_lux;
+      document.getElementById('s_ir_state').textContent = r.ir_led_on ? 'ON' : 'OFF';
+
+      // Microfone & Coluna
+      if (r.microphone) {
+        const m = r.microphone;
+        document.getElementById('s_mic_level').textContent = `RMS: ${m.rms.toFixed(1)}`;
+        const vuPct = Math.min(100, Math.max(5, (m.rms / Math.max(12.0, m.vad_threshold_rms * 2.2)) * 100));
+        document.getElementById('micVuBar').style.width = `${vuPct}%`;
+        const pill = document.getElementById('hudVoicePill');
+        if (m.recording_speech) {
+          document.getElementById('s_mic_state').innerHTML = `<span class="text-rose-400 font-bold animate-pulse">🔴 A OUVIR A SUA VOZ NO SCOUT...</span>`;
+          pill.textContent = '🔴 A ouvir a sua voz...';
+        } else if (m.awake_remaining_s > 0) {
+          document.getElementById('s_mic_state').innerHTML = `<span class="text-emerald-400 font-bold">🟢 CONVERSA ATIVA (${m.awake_remaining_s}s)</span>`;
+          pill.textContent = `🟢 Conversa Ativa (${m.awake_remaining_s}s) · Fale à vontade`;
+        } else {
+          document.getElementById('s_mic_state').innerHTML = `<span class="text-cyan-300">🎤 Diga <b>"Scout"</b> para falar</span>`;
+          pill.textContent = `🎤 "${m.last_transcript}"`;
+        }
+        document.getElementById('s_mic_last_heard').textContent = `Última frase: "${m.last_transcript}"`;
+      }
+      if (r.speaker) {
+        document.getElementById('s_spk_state').textContent = r.speaker.playing ? '🔊 A FALAR' : 'Pronta';
+      }
+
+      // Odometria
+      if (r.odometry) {
+        document.getElementById('s_odom_x').textContent = `${r.odometry.x.toFixed(2)}m`;
+        document.getElementById('s_odom_y').textContent = `${r.odometry.y.toFixed(2)}m`;
+        document.getElementById('s_odom_yaw').textContent = `${r.odometry.yaw_deg.toFixed(0)}°`;
+      }
+    }
+
+    // =========================================================================
+    // COMANDOS BASE (MOVIMENTO, ÁUDIO, CHAT IA, TECLADO)
+    // =========================================================================
+    async function updateAudioSettings() {
+      const speaker_volume_pct = parseInt(document.getElementById('s_spk_vol_slider').value, 10);
+      const mic_vad_listening = document.getElementById('s_mic_vad_toggle').checked;
+      const mic_sensitivity_pct = parseInt(document.getElementById('s_mic_sens_slider').value, 10);
+      const mic_require_wake_word = document.getElementById('s_mic_wake_toggle').checked;
+      await fetch('/api/audio/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ speaker_volume_pct, mic_vad_listening, mic_sensitivity_pct, mic_require_wake_word })
+      });
+    }
+
+    async function wakeScoutNow() {
+      await fetch('/api/audio/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ wake_now: true })
+      });
+    }
+
+    function sendMove(x, y, z) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'move', x, y, z }));
+      } else {
+        fetch('/api/move', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({linear_x: x, linear_y: y, angular_z: z}) });
+      }
+    }
+
+    function sendStop() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'stop' }));
+      } else {
+        fetch('/api/stop', { method: 'POST' });
+      }
+    }
+
+    function toggleIR() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'ir' }));
+      } else {
+        fetch('/api/night-vision', { method: 'POST' });
+      }
+    }
+
+    async function changeAIProvider() {
+      const raw = document.getElementById('aiProviderSelect').value;
+      const [provider, model] = raw.split('|');
+      await fetch('/api/ai/provider', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ provider, model })
+      });
+    }
+
+    async function saveRobotConfig() {
+      const scout_ip = document.getElementById('scoutIpInput').value.trim();
+      const mock_mode = document.getElementById('mockModeCheckbox').checked;
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ scout_ip, mock_mode })
+      });
+      const data = await res.json();
+      if (data.robot) updateHUD(data.robot);
+    }
+
+    function appendLogEntry(entry) {
+      const log = document.getElementById('chatLog');
+      const div = document.createElement('div');
+      const isUser = entry.source === 'mic_scout' || entry.source === 'web_chat';
+      const isIgnored = entry.source === 'mic_ignored';
+      if (isIgnored) {
+        div.className = 'bg-slate-900/50 border border-slate-800/80 rounded-xl p-2 mr-8 text-slate-400 italic';
+      } else if (isUser) {
+        div.className = 'bg-cyan-950/60 border border-cyan-800/50 rounded-xl p-2.5 ml-6';
+      } else {
+        div.className = 'bg-slate-800/85 border border-slate-700/60 rounded-xl p-2.5 mr-4';
+      }
+      const colorClass = isIgnored ? 'text-amber-400/80' : (isUser ? 'text-cyan-300' : 'text-emerald-400');
+      div.innerHTML = `<div class="flex justify-between items-center mb-0.5"><span class="font-bold ${colorClass}">${entry.sender}</span><span class="text-[10px] text-slate-500 mono-val">${entry.timestamp.split(' ')[1] || ''}</span></div><div>${entry.text}</div>`;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function sendChat() {
+      const input = document.getElementById('chatInput');
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      input.value = '';
+
+      const log = document.getElementById('chatLog');
+      const loadDiv = document.createElement('div');
+      loadDiv.className = 'bg-slate-800/50 rounded-xl p-2.5 mr-4 text-slate-400 italic';
+      loadDiv.textContent = '⏳ O Scout está a pensar...';
+      log.appendChild(loadDiv);
+      log.scrollTop = log.scrollHeight;
+
+      try {
+        const include_vision = document.getElementById('sendVisionCheck').checked;
+        const speak_on_scout = document.getElementById('speakOnScoutCheck').checked;
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ prompt, include_vision, speak_on_scout })
+        });
+        const data = await res.json();
+        loadDiv.remove();
+        if (data.robot) updateHUD(data.robot);
+        if (data.identity) updateIdentityHUD(data.identity);
+      } catch (err) {
+        loadDiv.remove();
+      }
+    }
+
+    let recognition = null;
+    function toggleVoiceRecognition() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) return;
+      if (!recognition) {
+        recognition = new SpeechRec();
+        recognition.lang = 'pt-PT';
+        recognition.interimResults = false;
+        recognition.onresult = (event) => {
+          document.getElementById('chatInput').value = event.results[0][0].transcript;
+          sendChat();
+        };
+        recognition.onend = () => document.getElementById('micBtn').classList.remove('bg-rose-600');
+      }
+      document.getElementById('micBtn').classList.add('bg-rose-600');
+      recognition.start();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (document.activeElement.tagName === 'INPUT') return;
+      const k = e.key.toLowerCase();
+      if (k === 'w') driveHold(0.40, 0, 0);
+      else if (k === 's') driveHold(-0.40, 0, 0);
+      else if (k === 'a') driveHold(0, 0.40, 0);
+      else if (k === 'd') driveHold(0, -0.40, 0);
+      else if (k === 'q') driveHold(0, 0, 0.8);
+      else if (k === 'e') driveHold(0, 0, -0.8);
+      else if (k === ' ') sendStop();
+    });
+    window.addEventListener('keyup', (e) => {
+      if (document.activeElement.tagName === 'INPUT') return;
+      if (['w','a','s','d','q','e'].includes(e.key.toLowerCase())) sendStop();
+    });
+  </script>
+</body>
+</html>

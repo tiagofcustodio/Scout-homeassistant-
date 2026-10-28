@@ -1,0 +1,10 @@
+{
+  "name": "Moorebot Scout AI Hub",
+  "short_name": "Scout AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#06b6d4",
+  "orientation": "any",
+  "description": "Controlo remoto Mecanum, Visao e Voz IA para o Moorebot Scout (Android, PC e Samsung Galaxy Watch)"
+}

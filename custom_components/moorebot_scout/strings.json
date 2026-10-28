@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ligar ao Moorebot Scout AI (Mini PC)",
+        "description": "Introduza o endereço URL onde o servidor Moorebot Scout AI está a correr no seu Mini PC (porta 8085).",
+        "data": {
+          "hub_url": "URL do Servidor Scout (Mini PC)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Não foi possível ligar ao servidor do Scout. Verifique o IP do Mini PC e se a porta 8085 está aberta."
+    },
+    "abort": {
+      "already_configured": "Este Moorebot Scout já está configurado no Home Assistant."
+    }
+  }
+}

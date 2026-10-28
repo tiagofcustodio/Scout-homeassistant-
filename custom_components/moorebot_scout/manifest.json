@@ -1,0 +1,11 @@
+{
+  "domain": "moorebot_scout",
+  "name": "Moorebot Scout AI",
+  "codeowners": ["@Tiagofcustodio"],
+  "config_flow": true,
+  "documentation": "https://github.com/Tiagofcustodio/Scout-homeassistant-",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/Tiagofcustodio/Scout-homeassistant-/issues",
+  "requirements": [],
+  "version": "1.2.0"
+}

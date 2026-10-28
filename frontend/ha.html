@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Moorebot Scout - Painel Home Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #111318; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; }
+    .btn-ctrl { user-select: none; touch-action: manipulation; transition: all 0.1s; }
+    .btn-ctrl:active { transform: scale(0.94); background-color: #0284c7; }
+    .mono-val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col p-2.5 md:p-4 max-w-4xl mx-auto gap-3">
+
+  <!-- Topo Compacto (Ideal para Cartão / Painel Home Assistant) -->
+  <header class="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-2">
+    <div class="flex items-center gap-2">
+      <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span class="font-bold text-sm text-cyan-400">MOOREBOT SCOUT</span>
+      <span id="personBadge" class="text-[11px] bg-indigo-950 border border-indigo-700 text-indigo-200 px-2 py-0.5 rounded-full mono-val">👤 A identificar...</span>
+    </div>
+    <div class="flex items-center gap-2 text-xs">
+      <button onclick="toggleHAConfig()" id="haBadgeBtn" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-1 rounded-lg text-[11px] text-amber-300 mono-val">
+        🏠 Configurar HA
+      </button>
+      <a href="/" target="_blank" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-1 rounded-lg text-[11px] text-slate-300">
+        ⚙️ Painel Completo
+      </a>
+    </div>
+  </header>
+
+  <!-- Modal / Gaveta de Configuração do Home Assistant -->
+  <div id="haConfigBox" class="hidden bg-slate-900 border border-cyan-800/70 rounded-xl p-3 space-y-2 text-xs">
+    <div class="font-bold text-cyan-300 flex justify-between items-center">
+      <span>🏠 Ligação ao Home Assistant (Controlo de Dispositivos da Casa pelo Scout)</span>
+      <button onclick="toggleHAConfig()" class="text-slate-400 hover:text-white">✕</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div>
+        <label class="text-[11px] text-slate-400">URL do Home Assistant:</label>
+        <input id="haUrlInput" type="text" value="http://homeassistant.local:8123" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs mono-val mt-0.5" />
+      </div>
+      <div>
+        <label class="text-[11px] text-slate-400">Long-Lived Access Token (Perfil HA -> Segurança):</label>
+        <input id="haTokenInput" type="password" placeholder="Cole aqui o Token do Home Assistant" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs mono-val mt-0.5" />
+      </div>
+    </div>
+    <div class="flex justify-end gap-2">
+      <button onclick="saveHAConfig()" class="bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 rounded-lg font-bold text-white">Guardar & Sincronizar Dispositivos</button>
+    </div>
+  </div>
+
+  <!-- 1. CÂMARA AO VIVO + OVERLAY SIMPLES -->
+  <div class="relative rounded-2xl overflow-hidden bg-black border border-slate-800 aspect-video shadow-lg">
+    <img id="videoStream" src="/api/video.mjpeg" alt="Câmara do Scout" class="w-full h-full object-cover" />
+    <div class="absolute top-2.5 right-2.5 flex gap-2">
+      <button onclick="toggleHaPatrol()" id="haPatrolBtn" class="bg-emerald-900/90 hover:bg-emerald-800 border border-emerald-600 text-emerald-200 text-xs px-3 py-1 rounded-full font-bold backdrop-blur">
+        🚓 Patrulhar & Mapear
+      </button>
+      <button onclick="toggleIR()" id="irBtn" class="bg-slate-900/85 hover:bg-slate-800 border border-slate-700 text-xs px-3 py-1 rounded-full backdrop-blur">
+        🌙 IR: OFF
+      </button>
+    </div>
+    <div class="absolute bottom-2.5 left-2.5 right-2.5 flex justify-between items-center pointer-events-none">
+      <div class="bg-slate-900/85 border border-slate-800 text-[11px] px-3 py-1 rounded-full backdrop-blur flex gap-3 mono-val">
+        <span id="hudTof">📏 0.25m</span>
+        <span id="hudBat">🔋 100%</span>
+        <span id="hudMic" class="text-emerald-300">🎤 Escuta Ativa</span>
+      </div>
+      <div id="hudReplyBubble" class="bg-slate-900/90 border border-cyan-800/70 text-cyan-200 text-xs px-3 py-1 rounded-full backdrop-blur max-w-[60%] truncate">
+        Pronto
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. NAVEGAÇÃO MECANUM + INTERCOMUNICADOR DE VOZ / CASA INTELIGENTE -->
+  <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+
+    <!-- D-Pad de Navegação Mecanum (5 cols) -->
+    <div class="md:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col justify-between">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">🕹️ Navegação</span>
+        <div class="flex items-center gap-1.5 text-[11px]">
+          <span>🔊</span>
+          <input id="volSlider" type="range" min="20" max="200" step="10" value="140" onchange="updateVol()" class="w-20 accent-cyan-400 cursor-pointer" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-1.5 text-center text-xs font-bold">
+        <button onpointerdown="sendMove(0, 0, 0.7)" onpointerup="sendStop()" class="btn-ctrl bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl py-2.5">↶ Rodar E</button>
+        <button onpointerdown="sendMove(0.35, 0, 0)" onpointerup="sendStop()" class="btn-ctrl bg-cyan-950 hover:bg-cyan-900 border border-cyan-700 text-cyan-200 rounded-xl py-2.5">⬆️ Frente</button>
+        <button onpointerdown="sendMove(0, 0, -0.7)" onpointerup="sendStop()" class="btn-ctrl bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl py-2.5">↷ Rodar D</button>
+
+        <button onpointerdown="sendMove(0, 0.35, 0)" onpointerup="sendStop()" class="btn-ctrl bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl py-2.5">⬅️ Esq</button>
+        <button onclick="sendStop()" class="btn-ctrl bg-rose-950 hover:bg-rose-900 border border-rose-700 text-rose-200 rounded-xl py-2.5">🛑 PARAR</button>
+        <button onpointerdown="sendMove(0, -0.35, 0)" onpointerup="sendStop()" class="btn-ctrl bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl py-2.5">➡️ Dir</button>
+
+        <div></div>
+        <button onpointerdown="sendMove(-0.35, 0, 0)" onpointerup="sendStop()" class="btn-ctrl bg-cyan-950 hover:bg-cyan-900 border border-cyan-700 text-cyan-200 rounded-xl py-2.5">⬇️ Trás</button>
+        <div></div>
+      </div>
+    </div>
+
+    <!-- Voz Home Assistant -> Coluna do Scout & Controlo de Casa (7 cols) -->
+    <div class="md:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col justify-between gap-2">
+      <!-- Seletor de Modo: Reproduzir Voz Direta vs. Comando IA & Casa Inteligente -->
+      <div class="flex items-center justify-between gap-2">
+        <div class="grid grid-cols-2 gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 w-full text-xs font-semibold">
+          <button id="modeSpeakBtn" onclick="setVoiceMode('speak')" class="py-1.5 px-2 rounded-lg bg-cyan-600 text-white transition">
+            📢 Reproduzir a Minha Voz no Scout
+          </button>
+          <button id="modeAiBtn" onclick="setVoiceMode('ai')" class="py-1.5 px-2 rounded-lg text-slate-400 hover:text-white transition">
+            🤖 Mandar no Scout / Casa (IA)
+          </button>
+        </div>
+      </div>
+
+      <!-- Últimas mensagens / Resposta -->
+      <div id="miniLog" class="bg-slate-950/90 border border-slate-800/80 rounded-xl p-2.5 h-24 overflow-y-auto text-xs space-y-1">
+        <div class="text-slate-400">💡 <b>Modo Intercomunicador:</b> Tudo o que disser no microfone (ou escrever abaixo) será dito em voz alta pela coluna do Scout! Mude para <b>Mandar no Scout / Casa</b> para pedir "Acende a luz da sala" ou conversar com ele.</div>
+      </div>
+
+      <!-- Barra de Microfone e Texto -->
+      <div class="flex gap-2">
+        <button onclick="startBrowserMic()" id="haMicBtn" class="bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 rounded-xl font-bold text-sm flex items-center gap-1.5 text-white shadow">
+          🎤 <span id="haMicLabel">Falar</span>
+        </button>
+        <input id="haTextInput" type="text" placeholder="Escreva o que o Scout deve dizer na coluna..." onkeydown="if(event.key==='Enter') submitHaInput()" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-cyan-400" />
+        <button onclick="submitHaInput()" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-xl text-xs font-bold text-white">
+          Enviar
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let voiceMode = 'speak'; // 'speak' = reproduz diretamente na coluna do Scout | 'ai' = conversa + controla Home Assistant
+    let ws = null;
+
+    function connectWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws/control`);
+      ws.onclose = () => setTimeout(connectWS, 2000);
+    }
+    connectWS();
+
+    function setVoiceMode(mode) {
+      voiceMode = mode;
+      const speakBtn = document.getElementById('modeSpeakBtn');
+      const aiBtn = document.getElementById('modeAiBtn');
+      const inp = document.getElementById('haTextInput');
+      if (mode === 'speak') {
+        speakBtn.className = 'py-1.5 px-2 rounded-lg bg-cyan-600 text-white transition';
+        aiBtn.className = 'py-1.5 px-2 rounded-lg text-slate-400 hover:text-white transition';
+        inp.placeholder = 'Escreva ou fale para o Scout reproduzir na coluna...';
+      } else {
+        aiBtn.className = 'py-1.5 px-2 rounded-lg bg-emerald-600 text-white transition';
+        speakBtn.className = 'py-1.5 px-2 rounded-lg text-slate-400 hover:text-white transition';
+        inp.placeholder = 'Ex: "Acende a luz da sala", "Anda para a frente", "Olá Scout"...';
+      }
+    }
+
+    function sendMove(x, y, z) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'move', x, y, z }));
+      } else {
+        fetch('/api/move', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({linear_x: x, linear_y: y, angular_z: z}) });
+      }
+    }
+
+    function sendStop() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'stop' }));
+      } else {
+        fetch('/api/stop', { method: 'POST' });
+      }
+    }
+
+    let haPatrolling = false;
+    async function toggleHaPatrol() {
+      const url = haPatrolling ? '/api/patrol/stop' : '/api/patrol/start';
+      await fetch(url, { method: 'POST' });
+    }
+
+    function toggleIR() {
+      fetch('/api/night-vision', { method: 'POST' });
+    }
+
+    function updateVol() {
+      const speaker_volume_pct = parseInt(document.getElementById('volSlider').value, 10);
+      fetch('/api/audio/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ speaker_volume_pct })
+      });
+    }
+
+    function toggleHAConfig() {
+      document.getElementById('haConfigBox').classList.toggle('hidden');
+    }
+
+    async function saveHAConfig() {
+      const ha_url = document.getElementById('haUrlInput').value.trim();
+      const ha_token = document.getElementById('haTokenInput').value.trim();
+      const res = await fetch('/api/ha/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ ha_url, ha_token })
+      });
+      const data = await res.json();
+      toggleHAConfig();
+      addMiniLog('🏠 Home Assistant', data.ha.connected ? `Ligado! (${data.ha.device_count} dispositivos encontrados)` : `Configuração guardada (${data.ha.last_error || 'pronto'})`);
+    }
+
+    function addMiniLog(who, text) {
+      const box = document.getElementById('miniLog');
+      const div = document.createElement('div');
+      div.innerHTML = `<span class="font-bold text-cyan-300">${who}:</span> <span>${text}</span>`;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+      document.getElementById('hudReplyBubble').textContent = text;
+    }
+
+    async function submitHaInput() {
+      const inp = document.getElementById('haTextInput');
+      const text = inp.value.trim();
+      if (!text) return;
+      inp.value = '';
+
+      if (voiceMode === 'speak') {
+        addMiniLog('📢 Voz enviada p/ Coluna do Scout', text);
+        await fetch('/api/speak', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ text })
+        });
+      } else {
+        addMiniLog('🗣️ Você (HA)', text);
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ prompt: text, include_vision: true, speak_on_scout: true })
+        });
+        const data = await res.json();
+        if (data.reply) addMiniLog('🤖 Scout', data.reply);
+      }
+    }
+
+    let recognition = null;
+    function startBrowserMic() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        alert('Use o campo de texto ou abra em Chrome/Edge/App Home Assistant.');
+        return;
+      }
+      if (!recognition) {
+        recognition = new SpeechRec();
+        recognition.lang = 'pt-PT';
+        recognition.interimResults = false;
+        recognition.onresult = (ev) => {
+          const transcript = ev.results[0][0].transcript;
+          document.getElementById('haTextInput').value = transcript;
+          submitHaInput();
+        };
+        recognition.onend = () => {
+          document.getElementById('haMicBtn').className = 'bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 rounded-xl font-bold text-sm flex items-center gap-1.5 text-white shadow';
+          document.getElementById('haMicLabel').textContent = 'Falar';
+        };
+      }
+      document.getElementById('haMicBtn').className = 'bg-rose-600 animate-pulse px-3.5 py-2 rounded-xl font-bold text-sm flex items-center gap-1.5 text-white shadow';
+      document.getElementById('haMicLabel').textContent = 'A Ouvir...';
+      recognition.start();
+    }
+
+    async function pollStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        if (data.robot) {
+          const r = data.robot;
+          document.getElementById('hudTof').textContent = `📏 ${r.tof_distance_m}m`;
+          document.getElementById('hudBat').textContent = `🔋 ${r.battery_pct}%`;
+          document.getElementById('irBtn').textContent = `🌙 IR: ${r.ir_led_on ? 'ON' : 'OFF'}`;
+          if (r.microphone && r.microphone.recording_speech) {
+            document.getElementById('hudMic').textContent = '🔴 Mic Scout a Gravar...';
+          } else {
+            document.getElementById('hudMic').textContent = `🎤 Mic Scout (${r.microphone ? r.microphone.rms.toFixed(0) : 0} RMS)`;
+          }
+        }
+        if (data.identity && data.identity.live) {
+          const lv = data.identity.live;
+          const pb = document.getElementById('personBadge');
+          if (lv.active_person) {
+            pb.textContent = `👤 ${lv.active_person} (${lv.active_confidence_pct}%)`;
+            pb.className = 'text-[11px] bg-emerald-950 border border-emerald-600 text-emerald-300 px-2 py-0.5 rounded-full font-bold mono-val';
+          } else {
+            pb.textContent = '👤 Sem pessoa conhecida';
+            pb.className = 'text-[11px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded-full mono-val';
+          }
+        }
+        if (data.ha) {
+          const btn = document.getElementById('haBadgeBtn');
+          if (data.ha.connected) {
+            btn.textContent = `🏠 HA Online (${data.ha.device_count} disp.)`;
+            btn.className = 'bg-emerald-950 border border-emerald-700 px-2.5 py-1 rounded-lg text-[11px] text-emerald-300 mono-val';
+          }
+        }
+        if (data.map) {
+          haPatrolling = !!data.map.patrolling;
+          const pBtn = document.getElementById('haPatrolBtn');
+          if (haPatrolling) {
+            pBtn.textContent = `⏹️ Parar Patrulha (${data.map.explored_area_m2}m²)`;
+            pBtn.className = 'bg-rose-600 animate-pulse border border-rose-400 text-white text-xs px-3 py-1 rounded-full font-bold backdrop-blur';
+          } else {
+            pBtn.textContent = `🚓 Patrulhar (${data.map.explored_area_m2}m²)`;
+            pBtn.className = 'bg-emerald-900/90 hover:bg-emerald-800 border border-emerald-600 text-emerald-200 text-xs px-3 py-1 rounded-full font-bold backdrop-blur';
+          }
+        }
+      } catch (e) {}
+      setTimeout(pollStatus, 400);
+    }
+    pollStatus();
+  </script>
+</body>
+</html>

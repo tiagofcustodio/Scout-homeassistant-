@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Moorebot Scout AI (Mini PC)",
+        "description": "Enter the URL where the Moorebot Scout AI server is running on your Mini PC (port 8085).",
+        "data": {
+          "hub_url": "Scout Server URL (Mini PC)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the Scout server. Check the Mini PC IP and port 8085."
+    },
+    "abort": {
+      "already_configured": "This Moorebot Scout is already configured."
+    }
+  }
+}

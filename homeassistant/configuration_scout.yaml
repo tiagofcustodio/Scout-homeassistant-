@@ -1,0 +1,65 @@
+# ============================================================================
+# INTEGRAÇÃO MOOREBOT SCOUT + MINI PC HP NO HOME ASSISTANT (configuration.yaml)
+# Substitua 192.168.1.85 pelo IP fixo do seu Mini PC HP na rede local!
+# ============================================================================
+
+# 1. Câmara MJPEG Nativa do Scout no Home Assistant
+camera:
+  - platform: mjpeg
+    name: "Moorebot Scout Camera"
+    mjpeg_url: "http://192.168.1.85:8085/api/video.mjpeg"
+
+# 2. Comandos REST para o Home Assistant mandar o Scout Falar, Conversar ou Mover-se
+rest_command:
+  # Reproduz qualquer frase diretamente na coluna física do Scout!
+  # Exemplo em automação: service: rest_command.scout_speak / data: { text: "Bem-vindo a casa, Tiago!" }
+  scout_speak:
+    url: "http://192.168.1.85:8085/api/speak"
+    method: POST
+    content_type: "application/json"
+    payload: '{"text": "{{ text }}"}'
+
+  # Envia um comando para o Cérebro IA (Ollama llama3.2:3b) do Scout responder pela coluna
+  scout_ask_ai:
+    url: "http://192.168.1.85:8085/api/ai/chat"
+    method: POST
+    content_type: "application/json"
+    payload: '{"prompt": "{{ prompt }}", "include_vision": true, "speak_on_scout": true}'
+
+  # Movimento das Rodas Mecanum (linear_x, linear_y, angular_z)
+  scout_move:
+    url: "http://192.168.1.85:8085/api/move"
+    method: POST
+    content_type: "application/json"
+    payload: '{"linear_x": {{ x | default(0) }}, "linear_y": {{ y | default(0) }}, "angular_z": {{ z | default(0) }}, "duration_s": {{ duration | default(1.2) }}}'
+
+  scout_stop:
+    url: "http://192.168.1.85:8085/api/stop"
+    method: POST
+
+  scout_toggle_ir:
+    url: "http://192.168.1.85:8085/api/night-vision"
+    method: POST
+
+# 3. Sensores em Tempo Real do Scout no Home Assistant (ToF, Bateria, Pessoa Identificada)
+rest:
+  - resource: "http://192.168.1.85:8085/api/status"
+    scan_interval: 3
+    sensor:
+      - name: "Scout Distância ToF"
+        value_template: "{{ value_json.robot.tof_distance_m }}"
+        unit_of_measurement: "m"
+        icon: mdi:laser-pointer
+      - name: "Scout Bateria"
+        value_template: "{{ value_json.robot.battery_pct }}"
+        unit_of_measurement: "%"
+        device_class: battery
+      - name: "Scout Luminosidade"
+        value_template: "{{ value_json.robot.light_lux }}"
+        unit_of_measurement: "lx"
+      - name: "Scout Pessoa Identificada"
+        value_template: "{{ value_json.identity.live.active_person | default('Ninguém', true) }}"
+        icon: mdi:account-check
+      - name: "Scout Última Frase Ouvida"
+        value_template: "{{ value_json.robot.microphone.last_transcript }}"
+        icon: mdi:microphone

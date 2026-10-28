@@ -1,0 +1,9 @@
+# ============================================================================
+# CARTÃO SIMPLES PARA O DASHBOARD DO HOME ASSISTANT (Webpage / iframe Card)
+# Adicione um cartão "Página Web" (Webpage) no seu Dashboard do Home Assistant
+# ou cole este YAML no editor de cartões do Lovelace:
+# ============================================================================
+type: iframe
+url: http://192.168.1.85:8085/ha
+aspect_ratio: 115%
+title: Moorebot Scout (Câmara, Navegação & Voz)
