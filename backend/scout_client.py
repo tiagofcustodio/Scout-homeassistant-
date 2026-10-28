@@ -2,6 +2,8 @@ import asyncio
 import base64
 import io
 import math
+import os
+import re
 import socket
 import struct
 import threading
@@ -183,6 +185,7 @@ class ScoutClient:
         self._main_loop: Optional[asyncio.AbstractEventLoop] = None
         self._awake_until: float = 0.0
         self.last_voice_pcm: Optional[bytes] = None
+        self.last_speech_mp3: Optional[bytes] = None
 
         try:
             with open("scout_live_snapshot.jpg", "rb") as f:
@@ -958,6 +961,80 @@ class ScoutClient:
         self.telemetry.last_action = f"Luz/Visao Noturna: {'ON' if self.telemetry.ir_led_on else 'OFF'}"
         return self.get_status()
 
+    async def synthesize_speech_mp3(
+        self,
+        text: str,
+        voice: Optional[str] = None,
+        rate: Optional[str] = None,
+        pitch: Optional[str] = None,
+    ) -> Optional[bytes]:
+        """
+        Sintetiza voz neural humana em Português usando Edge-TTS (Duarte/Francisca/António).
+        Faz cache do áudio em memória para reprodução instantânea no browser e no robot.
+        """
+        if not text:
+            return None
+        try:
+            import edge_tts
+
+            clean_text = re.sub(r"\[.*?\]", "", text)
+            clean_text = re.sub(r"[\*#_~`]", "", clean_text)
+            clean_text = re.sub(r"\bm²\b", " metros quadrados", clean_text)
+            clean_text = re.sub(r"\bm\b", " metros", clean_text)
+            clean_text = re.sub(r"%", " por cento", clean_text)
+            clean_text = re.sub(r"\blx\b", " lux", clean_text)
+            clean_text = re.sub(r"\bswitch\.\b", "", clean_text)
+            clean_text = re.sub(r"\blight\.\b", "", clean_text)
+            clean_text = re.sub(r"\bcover\.\b", "", clean_text)
+            clean_text = re.sub(r"\s+", " ", clean_text).strip()
+
+            if len(clean_text) > 350:
+                clean_text = clean_text[:350]
+
+            target_voice = voice or self.active_voice
+            target_rate = rate or self.active_voice_rate
+            target_pitch = pitch or self.active_voice_pitch
+
+            vol_pct = self.telemetry.speaker_volume_pct
+            vol_diff = vol_pct - 100
+            vol_str = f"+{vol_diff}%" if vol_diff >= 0 else f"{vol_diff}%"
+
+            async def _synthesize(v: str) -> bytearray:
+                buf = bytearray()
+                comm = edge_tts.Communicate(
+                    clean_text,
+                    voice=v,
+                    rate=target_rate,
+                    pitch=target_pitch,
+                    volume=vol_str,
+                )
+                async for chunk in comm.stream():
+                    if chunk["type"] == "audio":
+                        buf.extend(chunk["data"])
+                return buf
+
+            mp3_buf = bytearray()
+            try:
+                mp3_buf = await _synthesize(target_voice)
+            except Exception as ex:
+                print(f"[TTS] Erro ao sintetizar com {target_voice}: {ex}")
+
+            if (not mp3_buf or len(mp3_buf) == 0) and target_voice != "pt-PT-DuarteNeural":
+                print(f"[TTS] Fallback automático para voz fiável 'pt-PT-DuarteNeural'")
+                try:
+                    mp3_buf = await _synthesize("pt-PT-DuarteNeural")
+                except Exception as ex_fb:
+                    print(f"[TTS] Erro no fallback: {ex_fb}")
+
+            if mp3_buf and len(mp3_buf) > 0:
+                self.last_speech_mp3 = bytes(mp3_buf)
+                self.telemetry.speaker_last_text = clean_text
+                return self.last_speech_mp3
+            return None
+        except Exception as e:
+            print(f"[TTS] Erro em synthesize_speech_mp3: {e}")
+            return None
+
     async def speak_on_robot(
         self,
         text: str,
@@ -966,9 +1043,8 @@ class ScoutClient:
         pitch: Optional[str] = None,
     ) -> bool:
         """
-        Sintetiza voz neural humana em Português e transmite via TCPROS (/net_audio_frame -> ADTS AAC 16kHz Mono)
-        para tocar diretamente na coluna de som física do Moorebot Scout!
-        Por padrão utiliza pt-PT-RaquelNeural (a voz mais suave, expressiva e natural de Portugal).
+        Sintetiza áudio e transmite via TCPROS para a coluna do Scout (se conectada)
+        e armazena o MP3 para streaming direto no navegador do utilizador.
         """
         if not text or self.telemetry.mock_mode:
             return False
@@ -976,148 +1052,95 @@ class ScoutClient:
         async with self._speaking_lock:
             try:
                 import av
-                import edge_tts
 
-                # Pré-processamento avançado do texto para prosódia e entoação humana natural
-                clean_text = re.sub(r"\[.*?\]", "", text)
-                clean_text = re.sub(r"[\*#_~`]", "", clean_text)
-                clean_text = re.sub(r"\bm²\b", " metros quadrados", clean_text)
-                clean_text = re.sub(r"\bm\b", " metros", clean_text)
-                clean_text = re.sub(r"%", " por cento", clean_text)
-                clean_text = re.sub(r"\blx\b", " lux", clean_text)
-                clean_text = re.sub(r"\bswitch\.\b", "", clean_text)
-                clean_text = re.sub(r"\blight\.\b", "", clean_text)
-                clean_text = re.sub(r"\bcover\.\b", "", clean_text)
-                clean_text = re.sub(r"\s+", " ", clean_text).strip()
-
-                if len(clean_text) > 280:
-                    clean_text = clean_text[:280]
-
-                target_voice = voice or self.active_voice
-                target_rate = rate or self.active_voice_rate
-                target_pitch = pitch or self.active_voice_pitch
-
-                self.telemetry.speaker_playing = True
-                self.telemetry.speaker_last_text = clean_text
-                self.telemetry.last_action = "🔊 A falar pela coluna do Scout..."
-                vol_pct = self.telemetry.speaker_volume_pct
-                vol_diff = vol_pct - 100
-                vol_str = f"+{vol_diff}%" if vol_diff >= 0 else f"{vol_diff}%"
-
-                async def _synthesize(v: str) -> bytearray:
-                    buf = bytearray()
-                    comm = edge_tts.Communicate(
-                        clean_text,
-                        voice=v,
-                        rate=target_rate,
-                        pitch=target_pitch,
-                        volume=vol_str,
-                    )
-                    async for chunk in comm.stream():
-                        if chunk["type"] == "audio":
-                            buf.extend(chunk["data"])
-                    return buf
-
-                mp3_buf = bytearray()
-                try:
-                    mp3_buf = await _synthesize(target_voice)
-                except Exception as ex:
-                    print(f"[TTS] Erro ao sintetizar com {target_voice}: {ex}")
-
-                # Se a voz falhar ou não devolver dados (ex: Raquel indisponível no endpoint público da MS),
-                # fazemos fallback automático para pt-PT-DuarteNeural para o Scout nunca ficar mudo!
-                if (not mp3_buf or len(mp3_buf) == 0) and target_voice != "pt-PT-DuarteNeural":
-                    print(f"[TTS] Fallback automático para voz fiável 'pt-PT-DuarteNeural'")
-                    try:
-                        mp3_buf = await _synthesize("pt-PT-DuarteNeural")
-                    except Exception as ex_fb:
-                        print(f"[TTS] Erro no fallback: {ex_fb}")
-
-                if not mp3_buf or len(mp3_buf) == 0:
-                    print("[TTS] Nenhum áudio gerado após tentativas.")
+                mp3_bytes = await self.synthesize_speech_mp3(text, voice=voice, rate=rate, pitch=pitch)
+                if not mp3_bytes:
                     self.telemetry.speaker_playing = False
                     self.telemetry.last_action = "Aviso: Sem áudio TTS gerado"
                     return False
 
-                def _encode_adts_sync(mp3_bytes: bytes) -> List[bytes]:
-                    in_container = av.open(io.BytesIO(mp3_bytes), format="mp3")
-                    out_buf = io.BytesIO()
-                    out_container = av.open(out_buf, mode="w", format="adts")
-                    out_stream = out_container.add_stream("aac", rate=16000, layout="mono")
-                    resampler = av.AudioResampler(format="fltp", layout="mono", rate=16000)
-                    for frame in in_container.decode(audio=0):
-                        for rframe in resampler.resample(frame):
-                            for pkt in out_stream.encode(rframe):
-                                out_container.mux(pkt)
-                    for pkt in out_stream.encode(None):
-                        out_container.mux(pkt)
-                    out_container.close()
+                self.telemetry.speaker_playing = True
+                self.telemetry.last_action = "🔊 A reproduzir voz..."
 
-                    raw = out_buf.getvalue()
-                    frames: List[bytes] = []
-                    idx = 0
-                    while idx < len(raw) - 7:
-                        if raw[idx] == 0xFF and (raw[idx + 1] & 0xF0) == 0xF0:
-                            flen = ((raw[idx + 3] & 0x03) << 11) | (raw[idx + 4] << 3) | ((raw[idx + 5] & 0xE0) >> 5)
-                            if flen <= 0 or idx + flen > len(raw):
-                                break
-                            frames.append(raw[idx : idx + flen])
-                            idx += flen
-                        else:
-                            idx += 1
-                    return frames
+                with self._audio_lock:
+                    has_subs = len(self._audio_subscribers) > 0
 
-                adts_frames = await asyncio.to_thread(_encode_adts_sync, bytes(mp3_buf))
-                if not adts_frames:
-                    return False
+                if has_subs:
+                    def _encode_adts_sync(mp3_data: bytes) -> List[bytes]:
+                        in_container = av.open(io.BytesIO(mp3_data), format="mp3")
+                        out_buf = io.BytesIO()
+                        out_container = av.open(out_buf, mode="w", format="adts")
+                        out_stream = out_container.add_stream("aac", rate=16000, layout="mono")
+                        resampler = av.AudioResampler(format="fltp", layout="mono", rate=16000)
+                        for frame in in_container.decode(audio=0):
+                            for rframe in resampler.resample(frame):
+                                for pkt in out_stream.encode(rframe):
+                                    out_container.mux(pkt)
+                        for pkt in out_stream.encode(None):
+                            out_container.mux(pkt)
+                        out_container.close()
 
-                for i, aac_bytes in enumerate(adts_frames):
-                    self._audio_seq += 1
-                    self.telemetry.speaker_frames_sent = self._audio_seq
-                    stamp_us = int(time.time() * 1_000_000)
-                    body = (
-                        struct.pack(
-                            "<IQIbIiiiiI",
-                            self._audio_seq,
-                            stamp_us,
-                            2000,
-                            2,  # AUDIO_STREAM_AAC
-                            self._audio_seq,
-                            16000,
-                            16,
-                            1,
-                            0,
-                            len(aac_bytes),
-                        )
-                        + aac_bytes
-                    )
-                    pkt = struct.pack("<I", len(body)) + body
+                        raw = out_buf.getvalue()
+                        frames: List[bytes] = []
+                        idx = 0
+                        while idx < len(raw) - 7:
+                            if raw[idx] == 0xFF and (raw[idx + 1] & 0xF0) == 0xF0:
+                                flen = ((raw[idx + 3] & 0x03) << 11) | (raw[idx + 4] << 3) | ((raw[idx + 5] & 0xE0) >> 5)
+                                if flen <= 0 or idx + flen > len(raw):
+                                    break
+                                frames.append(raw[idx : idx + flen])
+                                idx += flen
+                            else:
+                                idx += 1
+                        return frames
 
-                    dead = []
-                    with self._audio_lock:
-                        for conn in self._audio_subscribers:
-                            try:
-                                conn.sendall(pkt)
-                            except Exception:
-                                dead.append(conn)
-                        for d in dead:
-                            self._audio_subscribers.remove(d)
-                        self.telemetry.speaker_subscribers = len(self._audio_subscribers)
+                    adts_frames = await asyncio.to_thread(_encode_adts_sync, mp3_bytes)
+                    if adts_frames:
+                        for i, aac_bytes in enumerate(adts_frames):
+                            self._audio_seq += 1
+                            self.telemetry.speaker_frames_sent = self._audio_seq
+                            stamp_us = int(time.time() * 1_000_000)
+                            body = (
+                                struct.pack(
+                                    "<IQIbIiiiiI",
+                                    self._audio_seq,
+                                    stamp_us,
+                                    2000,
+                                    2,  # AUDIO_STREAM_AAC
+                                    self._audio_seq,
+                                    16000,
+                                    16,
+                                    1,
+                                    0,
+                                    len(aac_bytes),
+                                )
+                                + aac_bytes
+                            )
+                            pkt = struct.pack("<I", len(body)) + body
 
-                    if i == 0 and self._audio_seq == 1:
-                        # Na primeira vez que o SpeakerNode acorda, tem sleep(1) ao iniciar o ALSA
-                        await asyncio.sleep(1.1)
-                        with self._audio_lock:
-                            for conn in self._audio_subscribers:
-                                try:
-                                    conn.sendall(pkt)
-                                except Exception:
-                                    pass
+                            dead = []
+                            with self._audio_lock:
+                                for conn in self._audio_subscribers:
+                                    try:
+                                        conn.sendall(pkt)
+                                    except Exception:
+                                        dead.append(conn)
+                                for d in dead:
+                                    self._audio_subscribers.remove(d)
+                                self.telemetry.speaker_subscribers = len(self._audio_subscribers)
 
-                    await asyncio.sleep(0.060)
+                            if i == 0 and self._audio_seq == 1:
+                                await asyncio.sleep(1.1)
+                                with self._audio_lock:
+                                    for conn in self._audio_subscribers:
+                                        try:
+                                            conn.sendall(pkt)
+                                        except Exception:
+                                            pass
+
+                            await asyncio.sleep(0.060)
 
                 self.telemetry.speaker_playing = False
-                # Renova a janela de 30s de conversa ativa a contar do momento em que o Scout termina de falar!
                 if self._awake_until > time.time() - 5.0:
                     self._awake_until = time.time() + 30.0
                 self.telemetry.last_action = "Pronto (Voz reproduzida)"

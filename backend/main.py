@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -577,6 +578,26 @@ async def change_ai_provider(req: AIProviderUpdate):
     return {"ai": config}
 
 
+@app.get("/api/audio/tts")
+async def get_audio_tts(text: Optional[str] = None):
+    """
+    Endpoint de áudio streaming MP3.
+    Permite reproduzir a voz neural do Scout diretamente nas colunas do computador ou telemóvel.
+    """
+    if not text:
+        if scout.last_speech_mp3:
+            return Response(content=scout.last_speech_mp3, media_type="audio/mpeg")
+        return Response(content=b"", status_code=400)
+    mp3 = await scout.synthesize_speech_mp3(text)
+    if not mp3:
+        return Response(content=b"", status_code=500)
+    return Response(
+        content=mp3,
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "public, max-age=3600", "Accept-Ranges": "bytes"},
+    )
+
+
 @app.post("/api/ai/chat")
 async def chat_with_scout(req: ChatRequest):
     result = await _process_interaction_with_biometrics(
@@ -587,8 +608,12 @@ async def chat_with_scout(req: ChatRequest):
         source_label="Web App",
         speak_reply=req.speak_on_scout,
     )
+    reply_text = result.get("reply", "")
+    audio_url = f"/api/audio/tts?text={urllib.parse.quote(reply_text)}" if reply_text else None
     return {
         **result,
+        "reply": reply_text,
+        "audio_url": audio_url,
         "robot": scout.get_status(),
         "identity": identity_memory.get_summary(),
     }
@@ -598,7 +623,11 @@ async def chat_with_scout(req: ChatRequest):
 async def speak_on_scout(req: SpeakRequest):
     record_message_log("ha_tts", "📢 Voz Direta (Home Assistant / Web)", req.text, "spoken")
     asyncio.create_task(scout.speak_on_robot(req.text))
-    return {"status": "speaking", "text": req.text}
+    return {
+        "status": "speaking",
+        "text": req.text,
+        "audio_url": f"/api/audio/tts?text={urllib.parse.quote(req.text)}",
+    }
 
 
 async def mjpeg_generator():
