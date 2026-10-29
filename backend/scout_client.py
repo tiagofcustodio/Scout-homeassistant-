@@ -128,7 +128,7 @@ class ScoutTelemetry:
     mic_seq: int = 0
 
     # Coluna de Som Fisica do Scout (/net_audio_frame -> SpeakerNode)
-    speaker_volume_pct: int = 100
+    speaker_volume_pct: int = 200
     speaker_playing: bool = False
     speaker_subscribers: int = 0
     speaker_frames_sent: int = 0
