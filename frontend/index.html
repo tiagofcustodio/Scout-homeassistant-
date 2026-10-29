@@ -87,6 +87,13 @@
             <span id="headerPersonBadge" class="text-[10px] bg-indigo-950/90 border border-indigo-700/60 text-indigo-200 px-2.5 py-0.5 rounded-full mono-val">
               👤 A identificar...
             </span>
+
+            <!-- Indicador Dinâmico de Bateria no Topo -->
+            <div id="headerBatteryBadge" class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all bg-emerald-950/90 border-emerald-700/60 text-emerald-300 shadow-sm" title="Estado da Bateria do Scout">
+              <span id="headerBatteryIcon" class="text-xs">🔋</span>
+              <span id="headerBatteryPct" class="mono-val">--%</span>
+              <span id="headerBatteryState" class="text-[10px] text-slate-300 font-normal hidden sm:inline">(A ler...)</span>
+            </div>
           </div>
           <p class="text-[11px] text-slate-400">Robô Doméstico IA · Mapeamento Radar 2D · Memória Biométrica · Casa Inteligente</p>
         </div>
@@ -212,6 +219,8 @@
         <!-- Base da Câmara: Telemetria Rápida ToF + Microfone + Última Ação -->
         <div class="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
           <div class="bg-slate-950/85 border border-slate-800/90 text-xs px-3 py-1.5 rounded-full backdrop-blur-md flex items-center gap-3 mono-val">
+            <span id="hudBattery" class="text-emerald-300 font-bold flex items-center gap-1">🔋 --%</span>
+            <span class="text-slate-600">|</span>
             <span id="hudTof" class="text-emerald-300 font-semibold">📏 ToF: 0.25m</span>
             <span class="text-slate-600">|</span>
             <span id="hudImu" class="text-cyan-300">🧭 Pitch: 0.0°</span>
@@ -706,6 +715,26 @@
             <div class="grid grid-cols-2 gap-2 text-xs mono-val">
               <div class="bg-slate-900 px-3 py-1 rounded-lg flex justify-between"><span class="text-slate-400">Pitch:</span><span id="s_imu_pitch" class="font-bold">-0.2°</span></div>
               <div class="bg-slate-900 px-3 py-1 rounded-lg flex justify-between"><span class="text-slate-400">Roll:</span><span id="s_imu_roll" class="font-bold">-0.6°</span></div>
+            </div>
+          </div>
+
+          <!-- Bateria & Sistema de Energia -->
+          <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3">
+            <div class="flex items-center justify-between text-xs font-bold text-emerald-400 mb-1.5">
+              <span class="flex items-center gap-1.5"><span id="s_bat_title_icon">🔋</span> Bateria & Alimentação</span>
+              <span id="s_bat_state_badge" class="text-[10px] bg-emerald-950 border border-emerald-700/60 text-emerald-300 px-2 py-0.5 rounded-full font-semibold">Normal</span>
+            </div>
+            <div class="flex items-center justify-between text-xs mono-val mb-1">
+              <span class="text-slate-400">Nível de Carga:</span>
+              <span id="s_bat_pct_val" class="font-extrabold text-emerald-300 text-sm">--%</span>
+            </div>
+            <!-- Barra de Bateria -->
+            <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 p-0.5 mb-2">
+              <div id="s_bat_bar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: 50%;"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs mono-val">
+              <div class="bg-slate-900 px-2.5 py-1 rounded-lg flex justify-between"><span class="text-slate-400">Voltagem:</span><span id="s_bat_volt" class="font-bold text-cyan-300">-- V</span></div>
+              <div class="bg-slate-900 px-2.5 py-1 rounded-lg flex justify-between"><span class="text-slate-400">Modo:</span><span id="s_bat_mode" class="font-bold text-amber-300 truncate">Em uso</span></div>
             </div>
           </div>
 
@@ -1447,6 +1476,68 @@
       document.getElementById('hudTof').textContent = `📏 ToF: ${r.tof_distance_m}m`;
       document.getElementById('hudAction').textContent = r.last_action;
       document.getElementById('irBtn').textContent = `🌙 IR: ${r.ir_led_on ? 'ON' : 'OFF'}`;
+
+      // Bateria & Alimentação
+      const batPct = (r.battery_pct !== undefined && r.battery_pct !== null) ? r.battery_pct : 100;
+      const isCharging = Boolean(r.charging);
+      const batState = r.battery_state || (isCharging ? "A Carregar (Dock)" : "Bateria (Em uso)");
+      const batVolt = r.battery_voltage ? `${r.battery_voltage.toFixed(2)}V` : '-- V';
+
+      let batIcon = '🔋';
+      let batColorClass = 'text-emerald-300';
+      let batBadgeBorder = 'border-emerald-700/60 bg-emerald-950/90 text-emerald-300';
+      let barGrad = 'from-emerald-500 to-teal-400';
+
+      if (isCharging) {
+        batIcon = '⚡';
+        batColorClass = 'text-cyan-300 animate-pulse';
+        batBadgeBorder = 'border-cyan-600/80 bg-cyan-950/90 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.3)]';
+        barGrad = 'from-cyan-400 to-indigo-500 animate-pulse';
+      } else if (batPct <= 20) {
+        batIcon = '🪫';
+        batColorClass = 'text-rose-400 animate-pulse';
+        batBadgeBorder = 'border-rose-600/80 bg-rose-950/90 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.3)]';
+        barGrad = 'from-rose-600 to-amber-500';
+      } else if (batPct <= 45) {
+        batIcon = '🔋';
+        batColorClass = 'text-amber-300';
+        batBadgeBorder = 'border-amber-600/70 bg-amber-950/90 text-amber-300';
+        barGrad = 'from-amber-500 to-yellow-400';
+      }
+
+      // 1. Atualizar Badge do Cabeçalho
+      const headBadge = document.getElementById('headerBatteryBadge');
+      if (headBadge) {
+        headBadge.className = `flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all ${batBadgeBorder}`;
+        document.getElementById('headerBatteryIcon').textContent = batIcon;
+        document.getElementById('headerBatteryPct').textContent = `${batPct}%`;
+        document.getElementById('headerBatteryState').textContent = isCharging ? '(A carregar...)' : `(${batState})`;
+      }
+
+      // 2. Atualizar Cockpit HUD da Câmara
+      const hudBat = document.getElementById('hudBattery');
+      if (hudBat) {
+        hudBat.innerHTML = `${batIcon} <span class="${batColorClass}">${batPct}%</span>`;
+        hudBat.title = `Bateria: ${batPct}% (${batState})`;
+      }
+
+      // 3. Atualizar Cartão de Sensores & Hardware
+      const sBatPct = document.getElementById('s_bat_pct_val');
+      if (sBatPct) {
+        sBatPct.textContent = `${batPct}%`;
+        sBatPct.className = `font-extrabold ${batColorClass} text-sm`;
+        document.getElementById('s_bat_bar').style.width = `${Math.max(5, batPct)}%`;
+        document.getElementById('s_bat_bar').className = `h-full bg-gradient-to-r ${barGrad} rounded-full transition-all duration-500`;
+        document.getElementById('s_bat_volt').textContent = batVolt;
+        document.getElementById('s_bat_mode').textContent = batState;
+        const sTitleIcon = document.getElementById('s_bat_title_icon');
+        if (sTitleIcon) sTitleIcon.textContent = batIcon;
+        const sBadge = document.getElementById('s_bat_state_badge');
+        if (sBadge) {
+          sBadge.textContent = isCharging ? 'A Carregar ⚡' : (batPct <= 20 ? 'Bateria Fraca' : 'Normal');
+          sBadge.className = `text-[10px] px-2 py-0.5 rounded-full font-semibold border ${batBadgeBorder}`;
+        }
+      }
 
       // ToF
       document.getElementById('s_tof_dist').textContent = `${r.tof_distance_m}m`;

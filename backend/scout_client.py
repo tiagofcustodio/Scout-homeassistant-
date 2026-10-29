@@ -68,9 +68,10 @@ class ScoutTelemetry:
     scout_ip: str = "192.168.1.115"
 
     # Bateria & Energia (/SensorNode/simple_battery_status)
-    battery_pct: int = 100
-    battery_state: str = "Normal / Desacoplado"
-    charging: bool = False
+    battery_pct: int = 26
+    battery_state: str = "A Carregar (Dock)"
+    charging: bool = True
+    battery_voltage: float = 6.85
 
     # Laser Time-of-Flight (/SensorNode/tof - sensor_msgs/Range)
     tof_distance_m: float = 0.22
@@ -321,6 +322,7 @@ class ScoutClient:
         threading.Thread(target=self._tof_stream_loop, daemon=True).start()
         threading.Thread(target=self._imu_stream_loop, daemon=True).start()
         threading.Thread(target=self._light_stream_loop, daemon=True).start()
+        threading.Thread(target=self._battery_stream_loop, daemon=True).start()
         threading.Thread(target=self._battery_and_status_loop, daemon=True).start()
         threading.Thread(target=self._odom_stream_loop, daemon=True).start()
         threading.Thread(target=self._mic_stream_loop, daemon=True).start()
@@ -840,11 +842,84 @@ class ScoutClient:
         except Exception as e:
             self.telemetry.mic_last_transcript = f"[Erro STT: {e}]"
 
+    def _poll_sysfs_battery(self):
+        """Lê capacidade, estado e voltagem da bateria diretamente do fuel-gauge do kernel via SSH."""
+        try:
+            cmd = [
+                "ssh.exe",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "ConnectTimeout=2",
+                f"root@{self.telemetry.scout_ip}",
+                "cat /sys/devices/platform/ff180000.i2c/i2c-0/0-0062/power_supply/rk-bat/capacity 2>/dev/null; "
+                "cat /sys/devices/platform/ff180000.i2c/i2c-0/0-0062/power_supply/rk-bat/status 2>/dev/null; "
+                "cat /sys/devices/platform/ff180000.i2c/i2c-0/0-0062/power_supply/rk-bat/voltage_now 2>/dev/null"
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            if res.returncode == 0 and res.stdout:
+                lines = [l.strip() for l in res.stdout.strip().splitlines() if l.strip()]
+                if len(lines) >= 1 and lines[0].isdigit():
+                    pct = max(0, min(100, int(lines[0])))
+                    self.telemetry.battery_pct = pct
+                if len(lines) >= 2:
+                    st = lines[1]
+                    if "Charging" in st:
+                        self.telemetry.charging = True
+                        self.telemetry.battery_state = "A Carregar (Dock)"
+                    elif "Full" in st:
+                        self.telemetry.charging = True
+                        self.telemetry.battery_state = "Carregada (100%)"
+                    else:
+                        self.telemetry.charging = False
+                        self.telemetry.battery_state = "Bateria (Em uso)"
+                if len(lines) >= 3 and lines[2].isdigit():
+                    uv = int(lines[2])
+                    self.telemetry.battery_voltage = round(uv / 1_000_000.0, 2)
+        except Exception:
+            pass
+
+    def _battery_stream_loop(self):
+        """Subscreve `/SensorNode/simple_battery_status` (roller_eye/status: [modo, percentagem, voltagem])."""
+        while not self._stop_threads:
+            if self.telemetry.mock_mode:
+                time.sleep(1.0)
+                continue
+            sock = self._connect_tcpros_sub("/SensorNode", "/SensorNode/simple_battery_status", STATUS_MD5, "roller_eye/status")
+            if not sock:
+                time.sleep(2.5)
+                continue
+            try:
+                while not self._stop_threads and not self.telemetry.mock_mode:
+                    mlen = struct.unpack("<I", recv_exact(sock, 4))[0]
+                    mbytes = recv_exact(sock, mlen)
+                    if len(mbytes) >= 4:
+                        arr_len = struct.unpack("<I", mbytes[:4])[0]
+                        if arr_len >= 2:
+                            elems = struct.unpack(f"<{arr_len}i", mbytes[4 : 4 + arr_len * 4])
+                            chg_mode = elems[0]
+                            pct = max(0, min(100, int(elems[1])))
+                            self.telemetry.battery_pct = pct
+                            if chg_mode == 0:
+                                self.telemetry.charging = True
+                                self.telemetry.battery_state = "A Carregar (Dock)"
+                            elif chg_mode == 2:
+                                self.telemetry.charging = True
+                                self.telemetry.battery_state = "Carregada (100%)"
+                            else:
+                                self.telemetry.charging = False
+                                self.telemetry.battery_state = "Bateria (Em uso)"
+            except Exception:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+                time.sleep(1.5)
+
     def _battery_and_status_loop(self):
-        """Atualiza lista de topicos ROS e estado de visao noturna periodicamente."""
+        """Atualiza lista de topicos ROS e estado de bateria periodicamente."""
         while not self._stop_threads:
             if not self.telemetry.mock_mode:
                 try:
+                    self._poll_sysfs_battery()
                     uri = f"http://{self.telemetry.scout_ip}:11311"
                     proxy = self._get_proxy(uri, timeout=2.0)
                     code, _, val = proxy.getSystemState("/scout_web")
@@ -1204,6 +1279,7 @@ class ScoutClient:
             "battery_pct": t.battery_pct,
             "battery_state": t.battery_state,
             "charging": t.charging,
+            "battery_voltage": t.battery_voltage,
             "tof_distance_m": t.tof_distance_m,
             "tof_min_range_m": t.tof_min_range_m,
             "tof_max_range_m": t.tof_max_range_m,
