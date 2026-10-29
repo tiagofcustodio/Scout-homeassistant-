@@ -40,6 +40,7 @@ xbox_controller = XboxControllerManager(scout=scout, patrol_mapper=patrol_mapper
 _last_face_check_ts: float = 0.0
 _awaiting_name_until: float = 0.0
 _pending_unknown_voice_pcm: Optional[bytes] = None
+BIOMETRICS_STANDBY: bool = True
 
 app = FastAPI(title="Moorebot Scout AI & Control Hub", version="1.0.0")
 
@@ -217,7 +218,7 @@ async def _process_interaction_with_biometrics(
        e fica a aguardar o nome.
     3. Se reconhecer a pessoa pela cara e/ou voz, responde normalmente pelo cérebro IA tratando-a pelo nome!
     """
-    global _awaiting_name_until, _pending_unknown_voice_pcm
+    global _awaiting_name_until, _pending_unknown_voice_pcm, BIOMETRICS_STANDBY
     import time as _time
 
     now = _time.time()
@@ -225,74 +226,85 @@ async def _process_interaction_with_biometrics(
     if norm_pcm:
         identity_memory.cache_last_voice_pcm(norm_pcm)
 
-    # Caso 1: Estávamos à espera que a pessoa dissesse o nome (ou disse explicitamente "Eu sou o [Nome]")
-    is_waiting_name = now < _awaiting_name_until
-    candidate_name = (
-        identity_memory.extract_name_when_prompted(cleaned_prompt)
-        if is_waiting_name
-        else identity_memory.detect_enrollment_intent(raw_text)
-    )
-
-    if candidate_name:
-        _awaiting_name_until = 0.0
-        scout._awake_until = _time.time() + 45.0
-        record_message_log(source_tag, f"👤 {candidate_name} ({source_label})", raw_text, "enrolled")
-
-        countdown_reply = (
-            f"Um... dois... três! Rosto e voz memorizados! "
-            f"Prazer em conhecer-te, {candidate_name}!"
+    # Modo Standby Biométrico: Não bloqueia a conversa nem pede nomes, trata diretamente como Tiago!
+    if BIOMETRICS_STANDBY:
+        person = "Tiago"
+        conf = 100
+        f_match = "Tiago"
+        f_conf = 100
+        v_match = "Tiago"
+        v_conf = 100
+        patrol_mapper.add_landmark(f"👤 {person}")
+        record_message_log(source_tag, f"👤 {person} ({source_label})", raw_text, "accepted")
+    else:
+        # Caso 1: Estávamos à espera que a pessoa dissesse o nome (ou disse explicitamente "Eu sou o [Nome]")
+        is_waiting_name = now < _awaiting_name_until
+        candidate_name = (
+            identity_memory.extract_name_when_prompted(cleaned_prompt)
+            if is_waiting_name
+            else identity_memory.detect_enrollment_intent(raw_text)
         )
-        if speak_reply:
-            # Inicia a fala "Um... dois... três!" na coluna do Scout enquanto capta as 3 fotos na câmara!
-            asyncio.create_task(scout.speak_on_robot(countdown_reply))
 
-        enroll_res = await _enroll_with_countdown(candidate_name, norm_pcm)
-        p_info = enroll_res.get("person", {})
-        record_message_log(
-            "ai_reply",
-            f"🤖 Scout (Memória Biométrica · {p_info.get('face_samples', 3)} caras / {p_info.get('voice_samples', 1)} vozes)",
-            countdown_reply,
-            "replied",
-        )
-        return {
-            "provider": "memória biométrica",
-            "reply": countdown_reply,
-            "actions": [],
-        }
+        if candidate_name:
+            _awaiting_name_until = 0.0
+            scout._awake_until = _time.time() + 45.0
+            record_message_log(source_tag, f"👤 {candidate_name} ({source_label})", raw_text, "enrolled")
 
-    # Caso 2: Verificar se reconhecemos a Cara e/ou a Voz
-    live = await asyncio.to_thread(identity_memory.identify, cam_bytes, norm_pcm or scout.last_voice_pcm)
-    person = live.get("active_person")
-    conf = live.get("active_confidence_pct", 0)
-    v_match = live.get("voice_match")
-    v_conf = live.get("voice_confidence_pct", 0)
-    f_match = live.get("face_match")
-    f_conf = live.get("face_confidence_pct", 0)
+            countdown_reply = (
+                f"Um... dois... três! Rosto e voz memorizados! "
+                f"Prazer em conhecer-te, {candidate_name}!"
+            )
+            if speak_reply:
+                # Inicia a fala "Um... dois... três!" na coluna do Scout enquanto capta as 3 fotos na câmara!
+                asyncio.create_task(scout.speak_on_robot(countdown_reply))
 
-    if not person or conf < 55:
-        # Não reconheceu nem a cara nem a voz! Pede o nome e ativa espera de 60s
-        _awaiting_name_until = _time.time() + 60.0
-        scout._awake_until = _time.time() + 45.0
-        if norm_pcm:
-            _pending_unknown_voice_pcm = norm_pcm
+            enroll_res = await _enroll_with_countdown(candidate_name, norm_pcm)
+            p_info = enroll_res.get("person", {})
+            record_message_log(
+                "ai_reply",
+                f"🤖 Scout (Memória Biométrica · {p_info.get('face_samples', 3)} caras / {p_info.get('voice_samples', 1)} vozes)",
+                countdown_reply,
+                "replied",
+            )
+            return {
+                "provider": "memória biométrica",
+                "reply": countdown_reply,
+                "actions": [],
+            }
 
-        record_message_log(source_tag, f"❓ Desconhecido ({source_label})", raw_text, "unknown_person")
-        unknown_reply = (
-            "Olá, desculpa mas não reconheço a tua cara nem a tua voz. "
-            "Poderias dizer-me o teu nome e olhar diretamente para a câmara?"
-        )
-        record_message_log("ai_reply", "🤖 Scout (Reconhecimento Biométrico)", unknown_reply, "replied")
-        if speak_reply:
-            asyncio.create_task(scout.speak_on_robot(unknown_reply))
-        return {
-            "provider": "reconhecimento biométrico",
-            "reply": unknown_reply,
-            "actions": [],
-        }
+        # Caso 2: Verificar se reconhecemos a Cara e/ou a Voz
+        live = await asyncio.to_thread(identity_memory.identify, cam_bytes, norm_pcm or scout.last_voice_pcm)
+        person = live.get("active_person")
+        conf = live.get("active_confidence_pct", 0)
+        v_match = live.get("voice_match")
+        v_conf = live.get("voice_confidence_pct", 0)
+        f_match = live.get("face_match")
+        f_conf = live.get("face_confidence_pct", 0)
 
-    # Caso 3: Pessoa reconhecida! Registar landmark no mapa 2D e verificar comandos de Patrulha ou Casa Inteligente
-    patrol_mapper.add_landmark(f"👤 {person}")
-    record_message_log(source_tag, f"🎤 {person} ({conf}% · {source_label})", raw_text, "accepted")
+        if not person or conf < 55:
+            # Não reconheceu nem a cara nem a voz! Pede o nome e ativa espera de 60s
+            _awaiting_name_until = _time.time() + 60.0
+            scout._awake_until = _time.time() + 45.0
+            if norm_pcm:
+                _pending_unknown_voice_pcm = norm_pcm
+
+            record_message_log(source_tag, f"❓ Desconhecido ({source_label})", raw_text, "unknown_person")
+            unknown_reply = (
+                "Olá, desculpa mas não reconheço a tua cara nem a tua voz. "
+                "Poderias dizer-me o teu nome e olhar diretamente para a câmara?"
+            )
+            record_message_log("ai_reply", "🤖 Scout (Reconhecimento Biométrico)", unknown_reply, "replied")
+            if speak_reply:
+                asyncio.create_task(scout.speak_on_robot(unknown_reply))
+            return {
+                "provider": "reconhecimento biométrico",
+                "reply": unknown_reply,
+                "actions": [],
+            }
+
+        # Caso 3: Pessoa reconhecida! Registar landmark no mapa 2D e verificar comandos de Patrulha ou Casa Inteligente
+        patrol_mapper.add_landmark(f"👤 {person}")
+        record_message_log(source_tag, f"🎤 {person} ({conf}% · {source_label})", raw_text, "accepted")
 
     p_low = cleaned_prompt.lower()
     if any(w in p_low for w in ["parar patrulha", "para a patrulha", "termina a patrulha", "parar mapeamento"]):
@@ -390,10 +402,10 @@ async def startup_event():
 
 @app.get("/api/status")
 async def get_status():
-    global _last_face_check_ts
+    global _last_face_check_ts, BIOMETRICS_STANDBY
     import time as _time
     now = _time.time()
-    if now - _last_face_check_ts >= 1.8 and identity_memory.people:
+    if not BIOMETRICS_STANDBY and now - _last_face_check_ts >= 1.8 and identity_memory.people:
         _last_face_check_ts = now
         try:
             identity_memory.identify(jpeg_bytes=scout.get_camera_jpeg_bytes(), pcm_16k_bytes=None)
@@ -402,7 +414,10 @@ async def get_status():
     return {
         "robot": scout.get_status(),
         "ai": ai_brain.get_config(),
-        "identity": identity_memory.get_summary(),
+        "identity": {
+            **identity_memory.get_summary(),
+            "standby": BIOMETRICS_STANDBY,
+        },
         "ha": ha_bridge.get_status(),
         "map": patrol_mapper.get_map_state(),
         "xbox": xbox_controller.get_status(),
@@ -413,6 +428,19 @@ async def get_status():
             "pitch": scout.active_voice_pitch,
         },
         "logs": message_logs[-40:],
+    }
+
+
+@app.post("/api/biometrics/toggle")
+async def toggle_biometrics():
+    global BIOMETRICS_STANDBY
+    BIOMETRICS_STANDBY = not BIOMETRICS_STANDBY
+    return {
+        "standby": BIOMETRICS_STANDBY,
+        "identity": {
+            **identity_memory.get_summary(),
+            "standby": BIOMETRICS_STANDBY,
+        },
     }
 
 

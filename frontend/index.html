@@ -1228,6 +1228,24 @@
       const live = idData.live || {};
       const badge = document.getElementById('s_id_active_badge');
       const headerBadge = document.getElementById('headerPersonBadge');
+
+      if (idData.standby) {
+        if (badge) {
+          badge.textContent = '⏸️ Standby (Modo Livre)';
+          badge.className = 'text-[10px] bg-slate-900 border border-slate-700 px-2.5 py-0.5 rounded-full text-slate-300 font-semibold mono-val';
+        }
+        if (headerBadge) {
+          headerBadge.textContent = '👤 Tiago (Modo Livre)';
+          headerBadge.className = 'text-[10px] bg-cyan-950/90 border border-cyan-700/60 text-cyan-200 px-2.5 py-0.5 rounded-full font-semibold mono-val';
+          headerBadge.title = 'Memória Biométrica em Standby (Utilizador ativo: Tiago)';
+        }
+        const sFace = document.getElementById('s_id_face');
+        if (sFace) sFace.textContent = 'Standby';
+        const sVoice = document.getElementById('s_id_voice');
+        if (sVoice) sVoice.textContent = 'Standby';
+        return;
+      }
+
       if (live.active_person) {
         const txt = `👤 ${live.active_person} (${live.active_confidence_pct}%)`;
         badge.textContent = txt;
